@@ -14,7 +14,7 @@ internal static class DimPolicy
 
     /// <summary>
     /// A window that covers its whole monitor. A maximized window with a title bar also covers a monitor
-    /// that has no taskbar, but that's a normal app, not a game.
+    /// that has no taskbar, but that's a normal window, not a fullscreen app.
     /// </summary>
     public static bool IsFullscreen(Rectangle window, Rectangle monitor, bool isMaximized, bool hasCaption)
     {

@@ -4,7 +4,7 @@
 
 <h1 align="center">SideDim</h1>
 
-<p align="center"><b>Dims your other monitors while you game.</b></p>
+<p align="center"><b>Dims everything except what you're focused on.</b></p>
 
 <p align="center">
   <a href="https://github.com/Quintinator/SideDim/releases/latest"><img src="https://img.shields.io/github/v/release/Quintinator/SideDim?label=download" alt="Latest release"></a>
@@ -13,9 +13,13 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT%20%2B%20Commons%20Clause-green" alt="License: MIT + Commons Clause"></a>
 </p>
 
-SideDim is a small Windows tray app. When your game (or any window you choose) has focus, every other monitor goes dark. Alt-tab out and they come back at the brightness they had before.
+SideDim is a small Windows tray app that darkens every screen except the one you're using. Alt-tab out and they come back at the brightness they had before.
 
-Only one screen? SideDim works there too: it darkens everything around the focused window, so only your game or video stays lit.
+**For gaming.** Your second and third screens go dark while you play, so Discord, a browser or a stream on the side stops pulling at your eyes, and the room gets darker too. It works with borderless and exclusive fullscreen and never takes focus away from the game.
+
+**For work.** Writing, coding, a video call or a presentation: add the app, or let SideDim follow whatever window has focus. With Spotlight on, even the rest of the main screen fades, so only the window you're working in stays lit.
+
+Only one screen? SideDim works there too: it darkens everything around the focused window, so only the app you're using stays lit.
 
 <p align="center">
   <img src="docs/screenshot.png" width="430" alt="The SideDim settings window">
@@ -23,9 +27,9 @@ Only one screen? SideDim works there too: it darkens everything around the focus
 
 ## Features
 
-- **Pick your games.** Browse to an `.exe` (the dialog opens in your Steam library) or pick from apps that are running. Games are matched by exe name, so moving a game to another drive doesn't break anything.
-- **Any fullscreen app.** Optionally dim for anything that covers a whole monitor, such as videos and games you haven't added.
-- **Always mode.** Dim around whatever window has focus, game or not.
+- **Pick your apps.** Add games and work apps by browsing to an `.exe` or picking from what's running, Microsoft Store and Game Pass apps included. Apps are matched by exe name, so moving one to another drive doesn't break anything.
+- **Any fullscreen app.** Optionally dim for anything that covers a whole monitor: games you haven't added, videos, presentations.
+- **Always mode.** Dim around whatever window has focus, handy for focused work.
 - **Three ways to dim:**
   | Method | How | Best for |
   |---|---|---|
@@ -35,10 +39,10 @@ Only one screen? SideDim works there too: it darkens everything around the focus
 - **Spotlight.** Also darkens the focused window's own screen, leaving only the window lit. The cut-out follows the window when you move it.
 - **Works on a single monitor.** With one screen there's nothing beside it to dim, so SideDim turns the spotlight on by itself. The backlight options need a second monitor, so they're greyed out until one is connected; your choice is kept and comes back when you plug one in.
 - **Two sliders.** One for the backlight level, one for overlay darkness. A screen you already turned down further is never brightened.
-- **Test button.** Uses the settings window as the "game", so you can tune everything live without starting one.
-- **Dim now hotkey.** `Ctrl+Alt+F9` by default, for windowed games and videos. Any combination with Ctrl or Alt works; bare keys and Alt+F4 are refused so SideDim never steals keys from games.
+- **Test button.** Uses the settings window as the focused app, so you can tune everything live without starting a game or opening a document.
+- **Dim now hotkey.** `Ctrl+Alt+F9` by default, for a quick focus session, a windowed game or a video. Any combination with Ctrl or Alt works; bare keys and Alt+F4 are refused so SideDim never steals keys from games or other apps.
 - **Your brightness comes back.** SideDim saves each monitor's brightness to disk before it changes anything. After a crash or power cut, the next start restores it. An unplugged monitor is restored when it comes back.
-- **Never steals focus.** Overlays can't be clicked or focused, so exclusive fullscreen games don't minimize.
+- **Never steals focus.** Overlays can't be clicked or focused, so exclusive fullscreen games don't minimize and your typing never lands in the wrong window.
 - **Start with Windows.** A toggle in the settings window and in the tray menu.
 - One small exe. No installer, no admin rights, no network access.
 

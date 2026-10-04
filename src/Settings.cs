@@ -19,7 +19,7 @@ internal sealed class Settings
     // so the default uses a function key, which never produces a character.
     public const string DefaultHotkey = "Ctrl+Alt+F9";
 
-    /// <summary>Shell and screenshot tools that should never count as "the game". Always applied, never saved.</summary>
+    /// <summary>Shell and screenshot tools that should never count as the focused app. Always applied, never saved.</summary>
     // ApplicationFrameHost only ever wraps a Store app, which SideDim resolves to the real app instead.
     public static readonly IReadOnlyList<string> BuiltInNeverDimFor =
         ["explorer", "ScreenClippingHost", "SnippingTool", "ShellExperienceHost", "SearchHost", "StartMenuExperienceHost", "ApplicationFrameHost"];
@@ -30,7 +30,7 @@ internal sealed class Settings
     [JsonConverter(typeof(LenientEnumConverter<DimTrigger>))]
     public DimTrigger Trigger { get; set; } = DimTrigger.SelectedApps;
 
-    /// <summary>Exe paths or bare process names. Matched on file name, so a game that moves still matches.</summary>
+    /// <summary>Exe paths or bare process names. Matched on file name, so an app that moves still matches.</summary>
     public List<string> Apps { get; set; } = [];
 
     /// <summary>In SelectedApps mode, also dim for any app that covers a whole monitor.</summary>

@@ -60,7 +60,6 @@ internal sealed class SettingsForm : Form
     private readonly Label _hotkeyStatus = new() { AutoSize = true, ForeColor = Color.Firebrick };
     private readonly CheckBox _autostart = new() { Text = "Start with Windows", AutoSize = true };
 
-    private static string? s_lastBrowseFolder;
     private bool _loading;
     private bool _dimNowStartedHere; // closing the window only stops a "Dim now" that its own Test button started
 
@@ -145,7 +144,7 @@ internal sealed class SettingsForm : Form
         tip.SetToolTip(_modeBoth, "Backlight down and an overlay on top. As dark as it gets without turning screens off.");
         tip.SetToolTip(_backlight, "Monitor brightness (0-100) while dimmed. Screens already darker than this are left alone.");
         tip.SetToolTip(_spotlight, "Uses an overlay on the focused screen, with a hole for the window. Follows the window around.");
-        tip.SetToolTip(_test, "Uses this settings window as the game, so you can tune everything live. Click again to stop.");
+        tip.SetToolTip(_test, "Uses this settings window as the focused app, so you can tune everything live. Click again to stop.");
         tip.SetToolTip(_hotkey, "Click here and press a key combination with Ctrl or Alt, for example Ctrl+Alt+F9.");
         tip.SetToolTip(_autostart, "Starts SideDim in the tray when you log in.");
 
@@ -395,12 +394,9 @@ internal sealed class SettingsForm : Form
 
     private void BrowseForExe()
     {
-        using var dlg = new OpenFileDialog { Filter = "Programs (*.exe)|*.exe", Title = "Pick the game or app to dim for" };
-        // Where the user browsed last time, or the Steam library the first time.
-        if ((s_lastBrowseFolder ?? SteamLibraries.BiggestGamesFolder()) is { } start) dlg.InitialDirectory = start;
-        if (dlg.ShowDialog(this) != DialogResult.OK) return;
-        s_lastBrowseFolder = Path.GetDirectoryName(dlg.FileName);
-        AddApp(dlg.FileName);
+        // No InitialDirectory: Windows then opens wherever the user last browsed, like in any other app.
+        using var dlg = new OpenFileDialog { Filter = "Programs (*.exe)|*.exe", Title = "Pick an app or game to dim for" };
+        if (dlg.ShowDialog(this) == DialogResult.OK) AddApp(dlg.FileName);
     }
 
     private void ShowRunningApps()

@@ -90,7 +90,7 @@ internal sealed class TrayApp : ApplicationContext, ISettingsHost
         _tray = new NotifyIcon { Icon = _trayIcon, Visible = true, ContextMenuStrip = _menu.Strip };
         _tray.MouseClick += (_, e) => { if (e.Button == MouseButtons.Left) ShowSettings(); };
 
-        // The hotkey may count our settings window as "the game": the user is looking at it when they press it.
+        // The hotkey may count our settings window as the focused app: the user is looking at it when they press it.
         _hotkey.Pressed += () => ToggleDimNowCore(includeOwnWindows: true);
         RegisterHotkey();
 
@@ -118,7 +118,7 @@ internal sealed class TrayApp : ApplicationContext, ISettingsHost
 
     private void Tick()
     {
-        // While testing, our own settings window stands in for the game.
+        // While testing, our own settings window stands in for the focused app.
         var fg = ForegroundWatcher.Current(includeOwnWindows: IsDimNowOn);
         if (fg is not null && fg.ProcessId != Environment.ProcessId)
         {
@@ -187,7 +187,7 @@ internal sealed class TrayApp : ApplicationContext, ISettingsHost
         _spotlight.Apply(hole is null || fg is null ? [] : [new DimTarget(fg.Monitor, hole)]);
     }
 
-    /// <summary>The settings window's Test button: the settings window itself stands in for the game.</summary>
+    /// <summary>The settings window's Test button: the settings window itself stands in for the focused app.</summary>
     public void ToggleTest() => ToggleDimNowCore(includeOwnWindows: true);
 
     /// <summary>"Dim now" from the tray menu: keeps the monitor of the app you were using bright.</summary>
@@ -197,7 +197,7 @@ internal sealed class TrayApp : ApplicationContext, ISettingsHost
     {
         if (_dimNow is not null)
         {
-            // Hand back to the automatic rule rather than forcing a restore: if the game still has focus
+            // Hand back to the automatic rule rather than forcing a restore: if the app still has focus
             // the screens just stay dim, instead of flashing bright and dimming again. With automatic
             // dimming paused there's nothing to hand back to, so restore right away.
             _dimNow = null;

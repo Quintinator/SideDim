@@ -15,7 +15,7 @@
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <Product>SideDim</Product>
     <RepositoryUrl>https://github.com/Quintinator/SideDim</RepositoryUrl>
-    <Description>Dims your other monitors while you play.</Description>
+    <Description>Dims everything except the window you're focused on, for gaming and for work.</Description>
     <Copyright>SideDim contributors. MIT license with the Commons Clause (free, not for sale).</Copyright>
   </PropertyGroup>
 
