@@ -57,6 +57,8 @@ Only one screen? SideDim works there too: it darkens everything around the focus
    - `SideDim-x.y.z-win-x64-needs-dotnet8.exe` is under 1 MB but needs the [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0).
 2. Run it. The settings window opens the first time; after that SideDim lives in the tray.
 
+Each release also has `SHA256SUMS.txt`: `Get-FileHash` on your download should match the line for that file.
+
 Windows 10 or 11. The exe isn't code signed yet, so SmartScreen may warn the first time: click **More info**, then **Run anyway**.
 
 ## Controls
@@ -130,6 +132,8 @@ dotnet test               # tests only
 ```
 
 Exes land in `artifacts/publish/`. `tools/make-icon.ps1` regenerates the icon from code.
+
+To release: add a `## [x.y.z]` section to [CHANGELOG.md](CHANGELOG.md), then push a tag `vx.y.z`. GitHub Actions builds, tests and publishes the release with both exes, the license and checksums.
 
 Contributions are welcome. Please run `./build.ps1` before opening a pull request.
 

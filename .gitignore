@@ -5,3 +5,5 @@ dist/
 *.user
 artifacts/
 TestResults/
+release/
+release-notes.md

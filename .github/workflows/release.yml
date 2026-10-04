@@ -16,25 +16,30 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Check the changelog has notes for this version
+        shell: pwsh
+        run: |
+          $v = $env:GITHUB_REF_NAME.TrimStart('v')
+          ./tools/release-notes.ps1 -Version $v -Out release-notes.md
+
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
       - name: Pipeline
         shell: pwsh
-        run: ./build.ps1 -Version $env:GITHUB_REF_NAME.TrimStart('v')
+        run: |
+          $v = $env:GITHUB_REF_NAME.TrimStart('v')
+          ./build.ps1 -Version $v
 
-      - name: Name the release files
+      - name: Collect the release files
         shell: pwsh
         run: |
           $v = $env:GITHUB_REF_NAME.TrimStart('v')
-          New-Item -ItemType Directory release | Out-Null
-          Copy-Item artifacts/publish/self-contained/SideDim.exe "release/SideDim-$v-win-x64.exe"
-          Copy-Item artifacts/publish/framework-dependent/SideDim.exe "release/SideDim-$v-win-x64-needs-dotnet8.exe"
-          Copy-Item LICENSE release/LICENSE.txt
+          ./tools/prepare-release.ps1 -Version $v
 
       - name: Publish GitHub release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" release/* --generate-notes --title "SideDim $GITHUB_REF_NAME"
+        run: gh release create "$GITHUB_REF_NAME" release/* --verify-tag --title "SideDim $GITHUB_REF_NAME" --notes-file release-notes.md
