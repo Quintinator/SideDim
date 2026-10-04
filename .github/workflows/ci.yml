@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pipeline:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      # Same script you run locally: ./build.ps1
+      - name: Restore, format check, build, test, publish
+        shell: pwsh
+        run: ./build.ps1
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results
+          path: artifacts/test-results
+
+      - name: Upload exes
+        uses: actions/upload-artifact@v7
+        with:
+          name: SideDim-win-x64
+          path: artifacts/publish

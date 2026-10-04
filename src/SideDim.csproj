@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <ApplicationIcon>Assets\SideDim.ico</ApplicationIcon>
+    <AssemblyName>SideDim</AssemblyName>
+    <RootNamespace>SideDim</RootNamespace>
+    <Version>0.1.0</Version>
+    <!-- Keep the version shown in the app as "0.1.0", without "+<git hash>". -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <Product>SideDim</Product>
+    <RepositoryUrl>https://github.com/Quintinator/SideDim</RepositoryUrl>
+    <Description>Dims your other monitors while you play.</Description>
+    <Copyright>SideDim contributors. MIT license with the Commons Clause (free, not for sale).</Copyright>
+  </PropertyGroup>
+
+  <!-- Publish flags (single file, self-contained or not) live in build.ps1 so plain builds and tests stay simple. -->
+
+  <ItemGroup>
+    <EmbeddedResource Include="Assets\SideDim.ico" LogicalName="SideDim.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SideDim.Tests" />
+  </ItemGroup>
+
+</Project>

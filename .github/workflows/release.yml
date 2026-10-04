@@ -1,0 +1,37 @@
+name: Release
+
+# Push a tag like v0.2.0 to build, test and publish a GitHub release with both exes attached.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Pipeline
+        shell: pwsh
+        run: ./build.ps1 -Version $env:GITHUB_REF_NAME.TrimStart('v')
+
+      - name: Name the release files
+        shell: pwsh
+        run: |
+          $v = $env:GITHUB_REF_NAME.TrimStart('v')
+          New-Item -ItemType Directory release | Out-Null
+          Copy-Item artifacts/publish/self-contained/SideDim.exe "release/SideDim-$v-win-x64.exe"
+          Copy-Item artifacts/publish/framework-dependent/SideDim.exe "release/SideDim-$v-win-x64-needs-dotnet8.exe"
+          Copy-Item LICENSE release/LICENSE.txt
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          files: release/*
+          generate_release_notes: true
