@@ -18,5 +18,6 @@ $match = [regex]::Match($changelog, $pattern)
 if (-not $match.Success -or -not $match.Groups[1].Value.Trim()) {
     throw "CHANGELOG.md has no notes for version $Version. Add a '## [$Version] - <date>' section first."
 }
-Set-Content -Path $Out -Value $match.Groups[1].Value.Trim() -Encoding UTF8
+$target = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Out)
+[System.IO.File]::WriteAllText($target, $match.Groups[1].Value.Trim(), [System.Text.UTF8Encoding]::new($false))
 Write-Host "Release notes for $Version written to $Out"

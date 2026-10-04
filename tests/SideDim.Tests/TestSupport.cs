@@ -61,9 +61,7 @@ internal sealed class FakeStore(Timeline timeline) : IBrightnessStore
 
 internal sealed class TempFolder : IDisposable
 {
-    public string Path { get; } = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "sidedim-tests-" + Guid.NewGuid().ToString("N"));
-
-    public TempFolder() => Directory.CreateDirectory(Path);
+    public string Path { get; } = Directory.CreateTempSubdirectory("sidedim-tests-").FullName;
 
     public string File(string name) => System.IO.Path.Combine(Path, name);
 

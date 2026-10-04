@@ -298,7 +298,7 @@ internal sealed class SettingsForm : Form
             using var icon = Icon.ExtractAssociatedIcon(path);
             return icon?.ToBitmap();
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or System.Runtime.InteropServices.ExternalException)
         {
             return null;
         }

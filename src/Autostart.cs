@@ -10,12 +10,12 @@ internal static class Autostart
     /// <summary>A stale Run entry for a moved exe counts as off.</summary>
     public static bool IsOn => PointsAt(Stored(), Environment.ProcessPath);
 
-    public static bool TrySet(bool on)
+    public static bool TrySet(bool on, string? exe = null)
     {
         try
         {
             using var key = Registry.CurrentUser.CreateSubKey(RunKey);
-            if (on) key.SetValue(ValueName, $"\"{Environment.ProcessPath}\"");
+            if (on) key.SetValue(ValueName, $"\"{exe ?? Environment.ProcessPath}\"");
             else key.DeleteValue(ValueName, throwOnMissingValue: false);
             return true;
         }

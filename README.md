@@ -53,9 +53,11 @@ Only one screen? SideDim works there too: it darkens everything around the focus
 ## Install
 
 1. Download the latest exe from [Releases](https://github.com/Quintinator/SideDim/releases/latest):
-   - `SideDim-x.y.z-win-x64.exe` runs anywhere (about 70 MB, includes .NET).
+   - `SideDim-x.y.z-win-x64.exe` runs anywhere (about 50 MB, includes .NET).
    - `SideDim-x.y.z-win-x64-needs-dotnet10.exe` is under 1 MB but needs the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0).
 2. Run it. The settings window opens the first time; after that SideDim lives in the tray.
+
+Keep the exe in a folder of its own, not loose in Downloads, the Desktop or Documents: a harmful file saved next to it there could be loaded when SideDim starts. The large exe checks this when it starts and offers to move itself to `%LOCALAPPDATA%\Programs\SideDim`, with a Start menu shortcut.
 
 Each release also has `SHA256SUMS.txt`: `Get-FileHash` on your download should match the line for that file.
 
@@ -89,6 +91,7 @@ Everything in the settings window applies immediately. Settings are stored in `%
 | `RestoreDelayMs` | `200` | How long before restoring after focus leaves |
 | `FadeMs` | `300` | Overlay fade time, 0 to 2000 |
 | `ToggleHotkey` | `Ctrl+Alt+F9` | The Dim now hotkey. A function key is the default because Ctrl+Alt+letter is AltGr+letter on many keyboard layouts |
+| `WarnAboutFolder` | `true` | The large exe offers to move itself out of Downloads and other shared folders. **Don't ask again** sets this to `false` |
 | `Monitors` | `{}` | Per-screen overrides, keyed by the monitor's id: `Dim` (false = never dim), `BacklightLevel` and `OverlayStrength` (leave out to use the shared value). Easiest to set on the Advanced tab |
 
 ## Command line
@@ -106,6 +109,10 @@ In `%APPDATA%\SideDim\` unless noted (there's a link at the bottom of the settin
 | `settings.json` | Your settings |
 | `sidedim.log` | What SideDim did and any errors. The previous log is kept as `sidedim.log.old`. |
 | `hardware-state.json` | Brightness to restore. Only exists while a screen is dimmed, and lives in `%LOCALAPPDATA%\SideDim\` because it belongs to this PC's monitors. |
+
+## Uninstall
+
+Turn off Start with Windows, exit SideDim from the tray, then delete the exe (or `%LOCALAPPDATA%\Programs\SideDim`), the SideDim Start menu shortcut if there is one, and the `SideDim` folders in `%APPDATA%` and `%LOCALAPPDATA%`.
 
 ## Troubleshooting
 

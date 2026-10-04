@@ -8,14 +8,24 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <ApplicationIcon>Assets\SideDim.ico</ApplicationIcon>
+    <PublishSingleFile>true</PublishSingleFile>
     <AssemblyName>SideDim</AssemblyName>
     <RootNamespace>SideDim</RootNamespace>
-    <Version>0.2.0</Version>
+    <Version>0.2.1</Version>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <Product>SideDim</Product>
     <RepositoryUrl>https://github.com/Quintinator/SideDim</RepositoryUrl>
     <Description>Dims everything except the window you're focused on, for gaming and for work.</Description>
     <Copyright>SideDim contributors. MIT license with the Commons Clause (free, not for sale).</Copyright>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(SelfContained)' == 'true'">
+    <RuntimeHostConfigurationOption Include="SideDim.SelfContained" Value="true" />
+  </ItemGroup>
+
+  <!-- Without this the launcher loads a hostfxr.dll from the exe's own folder, such as Downloads. -->
+  <PropertyGroup Condition="'$(SelfContained)' != 'true'">
+    <AppHostDotNetSearch>EnvironmentVariable;Global</AppHostDotNetSearch>
   </PropertyGroup>
 
   <ItemGroup>

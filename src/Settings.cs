@@ -67,6 +67,9 @@ internal sealed class Settings
 
     public string ToggleHotkey { get; set; } = DefaultHotkey;
 
+    /// <summary>Offer to move the self-contained exe out of a shared folder such as Downloads.</summary>
+    public bool WarnAboutFolder { get; set; } = true;
+
     /// <summary>Keyed by the stable <see cref="Monitor.Id"/>.</summary>
     public Dictionary<string, MonitorSettings> Monitors { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 

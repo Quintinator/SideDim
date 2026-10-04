@@ -41,8 +41,7 @@ Step 'Test' {
 }
 
 if (-not $SkipPublish) {
-    $common = @('src', '--configuration', 'Release', '--runtime', 'win-x64',
-                '-p:PublishSingleFile=true', '-p:DebugType=none')
+    $common = @('src', '--configuration', 'Release', '--runtime', 'win-x64', '-p:DebugType=none')
     if ($Version) { $common += "-p:Version=$Version" }
     Step 'Publish self-contained exe' {
         dotnet publish @common --self-contained true `

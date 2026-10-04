@@ -32,6 +32,7 @@ internal sealed class TrayApp : ApplicationContext, ISettingsHost
     private static readonly TimeSpan DisplaySettleDelay = TimeSpan.FromMilliseconds(2500);
 
     private readonly SynchronizationContext _ui;
+    private readonly bool _inRiskyFolder;
     private readonly Settings _settings;
     private readonly NotifyIcon _tray;
     private readonly Icon _trayIcon;
@@ -64,12 +65,18 @@ internal sealed class TrayApp : ApplicationContext, ISettingsHost
     public event Action? DimNowChanged;
     public event Action? DisplaysChanged;
 
-    /// <remarks>The backlight dimmer must be created even in Overlay mode, because it restores brightness a crashed previous run left dimmed.</remarks>
+    /// <remarks>
+    /// The backlight dimmer must be created even in Overlay mode, because it restores brightness a crashed previous run left dimmed.
+    /// Autostart isn't repaired from a risky folder, so running a newer version from Downloads doesn't point Start with Windows there.
+    /// </remarks>
     public TrayApp(SynchronizationContext ui)
     {
         _ui = ui;
         _settings = Settings.Load();
-        Autostart.RepairPath();
+        _inRiskyFolder = InstallLocation.ThisBuildNeedsOwnFolder
+            && Environment.ProcessPath is { } exe
+            && SelfMove.IsRiskyFolder(Path.GetDirectoryName(exe)!);
+        if (!_inRiskyFolder) Autostart.RepairPath();
 
         _overlay = new OverlayDimmer(() => _settings);
         _spotlight = new OverlayDimmer(() => _settings);
@@ -102,9 +109,85 @@ internal sealed class TrayApp : ApplicationContext, ISettingsHost
         UpdateTooltip();
         Log.Write($"Started {Application.ProductVersion}, mode {_settings.Mode}, trigger {_settings.Trigger}, {_monitorCount} monitor(s)");
 
+        _ui.Post(_ => { if (!OfferOwnFolder()) ShowStartupNotice(); }, null);
+    }
+
+    private void ShowStartupNotice()
+    {
         if (_settings.IsFirstRun) ShowSettings();
         else if (!HotkeyWorks)
             _tray.ShowBalloonTip(5000, "SideDim", $"The hotkey {_settings.ToggleHotkey} is taken by another app. Pick another one in the settings.", ToolTipIcon.Warning);
+    }
+
+    /// <returns>True when SideDim moved and this copy is exiting.</returns>
+    /// <remarks>
+    /// The self-contained exe loads some Windows DLLs from its own folder before Main runs, so it can't protect itself
+    /// there. It can only make sure later starts happen from a folder of its own.
+    /// With unreadable settings, Don't ask again lasts for this session only: saving would replace that file with defaults.
+    /// </remarks>
+    private bool OfferOwnFolder()
+    {
+        if (!_inRiskyFolder || !_settings.WarnAboutFolder) return false;
+        var exe = Environment.ProcessPath!;
+        var folder = Path.GetDirectoryName(exe)!;
+        var mover = SelfMove.ForCurrentUser();
+        var nl = Environment.NewLine;
+        var move = new TaskDialogButton("Move it");
+        var page = new TaskDialogPage
+        {
+            Caption = "SideDim",
+            Icon = TaskDialogIcon.ShieldWarningYellowBar,
+            Verification = new TaskDialogVerificationCheckBox("Don't ask again"),
+            AllowCancel = true,
+        };
+        if (InstallLocation.SameFolder(folder, mover.TargetFolder))
+        {
+            var dlls = string.Join(", ", SelfMove.DllsIn(folder));
+            page.Heading = "Files next to SideDim that don't belong to it";
+            page.Text = $"SideDim doesn't use any .dll files, but these are in its folder: {dlls}.{nl}{nl}"
+                + $"A program can be tricked into loading files like these. Delete them from {folder} unless you put them there on purpose.";
+            page.Buttons.Add(TaskDialogButton.OK);
+        }
+        else
+        {
+            page.Heading = "Move SideDim to its own folder?";
+            page.Text = $"SideDim is running from {folder}.{nl}{nl}"
+                + $"A program in a shared folder like Downloads can be tricked into loading a harmful file that was saved next to it. In a folder of its own, files you download can't end up next to it.{nl}{nl}"
+                + $"Move it puts SideDim in {mover.TargetFolder}, adds it to the Start menu and restarts it from there.";
+            page.Buttons.Add(move);
+            page.Buttons.Add(new TaskDialogButton("Not now"));
+            page.DefaultButton = move;
+        }
+
+        var result = TaskDialog.ShowDialog(page);
+        if (page.Verification.Checked)
+        {
+            _settings.WarnAboutFolder = false;
+            if (!_settings.LoadFailed) _settings.Save();
+        }
+        return result == move && MoveToOwnFolder(exe, mover);
+    }
+
+    /// <remarks>The old exe is kept when Start with Windows still points at it.</remarks>
+    private bool MoveToOwnFolder(string exe, SelfMove mover)
+    {
+        var autostartWasOn = Autostart.IsOn;
+        try
+        {
+            mover.Install(exe);
+            var autostartFollowed = !autostartWasOn || Autostart.TrySet(true, mover.TargetExe);
+            mover.StartMovedCopy(autostartFollowed ? exe : null, showSettings: _settings.IsFirstRun);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Runtime.InteropServices.COMException or System.ComponentModel.Win32Exception)
+        {
+            Log.Write($"Could not move SideDim to {mover.TargetFolder}: {e}");
+            MessageBox.Show($"SideDim could not move itself: {e.Message}{Environment.NewLine}You can move SideDim.exe to a folder of its own yourself.",
+                "SideDim", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return false;
+        }
+        Log.Write($"Moved to {mover.TargetExe}; the new copy takes over");
+        ExitThread();
+        return true;
     }
 
     internal Settings Settings => _settings;

@@ -1,8 +1,11 @@
 using System.Runtime.InteropServices;
 using System.Text;
 
+[assembly: DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+
 namespace SideDim;
 
+/// <remarks>Every import loads from System32 only (assembly attribute above): dxva2.dll and dwmapi.dll aren't KnownDLLs, so a planted copy next to the exe would otherwise be loaded.</remarks>
 internal static class Native
 {
     public const int WS_EX_TRANSPARENT = 0x20;
@@ -158,6 +161,14 @@ internal static class Native
     }
 
     public const int ATTACH_PARENT_PROCESS = -1;
+    public const uint LOAD_LIBRARY_SEARCH_SYSTEM32 = 0x800;
+
+    [DllImport("kernel32.dll", SetLastError = true)] public static extern bool SetDefaultDllDirectories(uint directoryFlags);
+
+    public static readonly Guid FOLDERID_Downloads = new("374DE290-123F-4565-9164-39C4925E467B");
+
+    [DllImport("shell32.dll")]
+    public static extern int SHGetKnownFolderPath([MarshalAs(UnmanagedType.LPStruct)] Guid folderId, uint flags, IntPtr token, out IntPtr path);
 
     [DllImport("kernel32.dll")] public static extern bool AttachConsole(int processId);
 

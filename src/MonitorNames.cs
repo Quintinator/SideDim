@@ -6,6 +6,7 @@ internal static class MonitorNames
 {
     private const uint QDC_ONLY_ACTIVE_PATHS = 2;
     private const uint DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME = 2;
+    private const int ERROR_INSUFFICIENT_BUFFER = 122;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct LUID
@@ -84,13 +85,9 @@ internal static class MonitorNames
     public static Dictionary<string, string> Query()
     {
         var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        if (GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, out var pathCount, out var modeCount) != 0) return names;
+        if (QueryPaths() is not { } paths) return names;
 
-        var paths = new PATH_INFO[pathCount];
-        var modes = new MODE_INFO[modeCount];
-        if (QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, ref pathCount, paths, ref modeCount, modes, IntPtr.Zero) != 0) return names;
-
-        foreach (var path in paths.Take((int)pathCount))
+        foreach (var path in paths)
         {
             var request = new TARGET_DEVICE_NAME
             {
@@ -104,5 +101,20 @@ internal static class MonitorNames
                 names[request.DevicePath] = request.FriendlyName.Trim();
         }
         return names;
+    }
+
+    /// <remarks>The layout can change between the size query and the query itself; Microsoft documents retrying on ERROR_INSUFFICIENT_BUFFER.</remarks>
+    private static PATH_INFO[]? QueryPaths()
+    {
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            if (GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, out var pathCount, out var modeCount) != 0) return null;
+            var paths = new PATH_INFO[pathCount];
+            var modes = new MODE_INFO[modeCount];
+            var result = QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, ref pathCount, paths, ref modeCount, modes, IntPtr.Zero);
+            if (result == ERROR_INSUFFICIENT_BUFFER) continue;
+            return result == 0 ? paths.Take((int)pathCount).ToArray() : null;
+        }
+        return null;
     }
 }
