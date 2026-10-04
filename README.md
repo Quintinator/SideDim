@@ -54,7 +54,7 @@ Only one screen? SideDim works there too: it darkens everything around the focus
 
 1. Download the latest exe from [Releases](https://github.com/Quintinator/SideDim/releases/latest):
    - `SideDim-x.y.z-win-x64.exe` runs anywhere (about 70 MB, includes .NET).
-   - `SideDim-x.y.z-win-x64-needs-dotnet8.exe` is under 1 MB but needs the [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0).
+   - `SideDim-x.y.z-win-x64-needs-dotnet10.exe` is under 1 MB but needs the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0).
 2. Run it. The settings window opens the first time; after that SideDim lives in the tray.
 
 Each release also has `SHA256SUMS.txt`: `Get-FileHash` on your download should match the line for that file.
@@ -123,7 +123,7 @@ In `%APPDATA%\SideDim\` unless noted (there's a link at the bottom of the settin
 
 ## Building from source
 
-Needs the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0).
+Needs the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
 
 ```powershell
 ./build.ps1               # restore, format check, build, tests, publish (exactly what CI runs)

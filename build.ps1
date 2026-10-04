@@ -34,10 +34,10 @@ Step 'Restore' { dotnet restore }
 Step 'Format check' { dotnet format --verify-no-changes --no-restore }
 Step 'Build' { dotnet build --configuration $Configuration --no-restore -warnaserror }
 Step 'Test' {
-    dotnet test --configuration $Configuration --no-build --blame-hang-timeout 2m --blame-hang-dump-type none `
-        --logger 'console;verbosity=minimal' `
-        --logger 'trx;LogFileName=test-results.trx' `
-        --results-directory (Join-Path $artifacts 'test-results')
+    dotnet test --solution SideDim.sln --configuration $Configuration --no-build `
+        --timeout 2m --minimum-expected-tests 100 `
+        --results-directory (Join-Path $artifacts 'test-results') `
+        --report-xunit-trx --report-xunit-trx-filename test-results.trx
 }
 
 if (-not $SkipPublish) {

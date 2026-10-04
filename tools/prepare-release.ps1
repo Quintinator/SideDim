@@ -19,7 +19,7 @@ if (Test-Path $out) { Remove-Item $out -Recurse -Force }
 New-Item -ItemType Directory $out | Out-Null
 
 Copy-Item (Join-Path $publish 'self-contained\SideDim.exe') (Join-Path $out "SideDim-$Version-win-x64.exe")
-Copy-Item (Join-Path $publish 'framework-dependent\SideDim.exe') (Join-Path $out "SideDim-$Version-win-x64-needs-dotnet8.exe")
+Copy-Item (Join-Path $publish 'framework-dependent\SideDim.exe') (Join-Path $out "SideDim-$Version-win-x64-needs-dotnet10.exe")
 Copy-Item (Join-Path $root 'LICENSE') (Join-Path $out 'LICENSE.txt')
 
 foreach ($exe in Get-ChildItem $out -Filter *.exe) {

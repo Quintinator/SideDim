@@ -2,6 +2,21 @@
 
 All notable changes to SideDim. Each `## [version]` section becomes the notes of that GitHub release.
 
+## [0.2.0] - 2026-10-04
+
+### Changed
+
+- Runs on .NET 10, which Microsoft supports until November 2028. .NET 8, used by 0.1.0, stops getting security updates on 10 November 2026.
+- The small download is now `SideDim-0.2.0-win-x64-needs-dotnet10.exe` and needs the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0). The larger `SideDim-0.2.0-win-x64.exe` still runs on any Windows 10 or 11 PC without installing anything.
+
+### Downloads
+
+- `SideDim-0.2.0-win-x64.exe` runs on any Windows 10 or 11 PC (includes .NET).
+- `SideDim-0.2.0-win-x64-needs-dotnet10.exe` is much smaller but needs the .NET 10 Desktop Runtime.
+- `SHA256SUMS.txt` lets you check your download: `Get-FileHash SideDim-0.2.0-win-x64.exe` should match the line for that file.
+
+Settings carry over from 0.1.0: just replace the exe.
+
 ## [0.1.0] - 2026-10-04
 
 First public release.
