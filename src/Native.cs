@@ -12,6 +12,7 @@ internal static class Native
     public const int WS_EX_NOACTIVATE = 0x8000000;
 
     public const int WM_HOTKEY = 0x0312;
+    public const uint MOD_NOREPEAT = 0x4000;
     public const int WM_DPICHANGED = 0x02E0;
 
     public const uint MONITOR_DEFAULTTONEAREST = 2;
@@ -48,6 +49,8 @@ internal static class Native
 
     public delegate bool MonitorEnumProc(IntPtr hMonitor, IntPtr hdc, ref RECT rect, IntPtr data);
 
+    public delegate bool WindowEnumProc(IntPtr hWnd, IntPtr data);
+
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] public static extern IntPtr GetShellWindow();
     [DllImport("user32.dll")] public static extern IntPtr GetDesktopWindow();
@@ -60,6 +63,25 @@ internal static class Native
     public static extern int GetClassName(IntPtr hWnd, StringBuilder className, int maxCount);
 
     [DllImport("user32.dll")] public static extern IntPtr MonitorFromWindow(IntPtr hWnd, uint flags);
+
+    [DllImport("user32.dll")] public static extern bool EnumChildWindows(IntPtr parent, WindowEnumProc callback, IntPtr data);
+    [DllImport("user32.dll")] public static extern bool EnumWindows(WindowEnumProc callback, IntPtr data);
+
+    public const uint GW_OWNER = 4;
+    public const int DWMWA_CLOAKED = 14;
+
+    [DllImport("user32.dll")] public static extern IntPtr GetWindow(IntPtr hWnd, uint command);
+    [DllImport("user32.dll")] public static extern int GetWindowTextLength(IntPtr hWnd);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int maxCount);
+
+    [DllImport("dwmapi.dll", EntryPoint = "DwmGetWindowAttribute")]
+    public static extern int DwmGetWindowAttributeInt(IntPtr hWnd, int attribute, out int value, int size);
+
+    public const int ASFW_ANY = -1;
+
+    [DllImport("user32.dll")] public static extern bool AllowSetForegroundWindow(int processId);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     public static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFOEX info);
@@ -75,14 +97,31 @@ internal static class Native
 
     public const int GWL_STYLE = -16;
     public const int GWL_EXSTYLE = -20;
-    public const long WS_CAPTION = 0x00C00000;
+    public const int WS_CAPTION = 0x00C00000;
     public const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
     public const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
 
     [DllImport("user32.dll")] public static extern bool IsZoomed(IntPtr hWnd);
 
-    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
-    public static extern IntPtr GetWindowLongPtr(IntPtr hWnd, int index);
+    // GetWindowLongPtrW isn't exported by 32-bit user32. Styles are 32-bit values, so GetWindowLongW is right everywhere.
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongW")]
+    public static extern int GetWindowLong(IntPtr hWnd, int index);
+
+    public const uint EDD_GET_DEVICE_INTERFACE_NAME = 1;
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    public struct DISPLAY_DEVICE
+    {
+        public int cb;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string DeviceName;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string DeviceString;
+        public int StateFlags;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string DeviceID;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string DeviceKey;
+    }
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern bool EnumDisplayDevices(string? device, uint index, ref DISPLAY_DEVICE info, uint flags);
 
     [DllImport("dwmapi.dll")]
     public static extern int DwmGetWindowAttribute(IntPtr hWnd, int attribute, out RECT value, int size);

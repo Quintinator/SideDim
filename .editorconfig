@@ -12,6 +12,10 @@ end_of_line = crlf
 csharp_style_namespace_declarations = file_scoped:warning
 csharp_new_line_before_open_brace = all
 dotnet_sort_system_directives_first = true
+# Unused usings and private members fail the format check, so dead code doesn't pile up.
+dotnet_diagnostic.IDE0005.severity = warning
+dotnet_diagnostic.IDE0051.severity = warning
+dotnet_diagnostic.IDE0052.severity = warning
 
 [*.{csproj,props,targets,xml,json,yml,yaml}]
 indent_size = 2

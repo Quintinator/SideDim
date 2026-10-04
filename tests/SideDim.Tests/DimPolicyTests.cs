@@ -35,8 +35,16 @@ public class DimPolicyTests
     [Fact]
     public void Never_list_beats_every_other_rule()
     {
-        var s = new Settings { Trigger = DimTrigger.AnyWindow, NeverDimFor = ["explorer"], Apps = ["explorer"] };
-        Assert.False(DimPolicy.ShouldDim(s, "Explorer", isFullscreen: true));
+        var s = new Settings { Trigger = DimTrigger.AnyWindow, NeverDimFor = ["obs64"], Apps = ["obs64"] };
+        Assert.False(DimPolicy.ShouldDim(s, "OBS64", isFullscreen: true));
+    }
+
+    [Fact]
+    public void Built_in_shell_apps_never_dim_even_with_an_empty_never_list()
+    {
+        var s = new Settings { Trigger = DimTrigger.AnyWindow, NeverDimFor = [] };
+        Assert.False(DimPolicy.ShouldDim(s, "explorer", isFullscreen: true));
+        Assert.True(DimPolicy.ShouldDim(s, "notepad", isFullscreen: false));
     }
 
     [Fact]
@@ -76,21 +84,37 @@ public class DimPolicyTests
     [Fact]
     public void Spotlight_cuts_a_hole_for_the_focused_window()
     {
-        var s = new Settings { Spotlight = true };
         var window = new Rectangle(200, 100, 800, 600);
-        Assert.Equal(window, DimPolicy.SpotlightHole(s, keptBright: "D1", windowMonitor: "D1", window, isFullscreen: false));
+        Assert.Equal(window, DimPolicy.SpotlightHole(spotlightOn: true, keptBright: "D1", windowMonitor: "D1", window, isFullscreen: false));
     }
 
     [Fact]
     public void No_spotlight_when_turned_off_fullscreen_or_on_another_screen()
     {
         var window = new Rectangle(200, 100, 800, 600);
-        Assert.Null(DimPolicy.SpotlightHole(new Settings { Spotlight = false }, "D1", "D1", window, false));
-        Assert.Null(DimPolicy.SpotlightHole(new Settings { Spotlight = true }, "D1", "D1", window, isFullscreen: true));
-        Assert.Null(DimPolicy.SpotlightHole(new Settings { Spotlight = true }, "D1", "D2", window, false));
-        Assert.Null(DimPolicy.SpotlightHole(new Settings { Spotlight = true }, null, "D1", window, false));
-        Assert.Null(DimPolicy.SpotlightHole(new Settings { Spotlight = true }, "D1", "D1", Rectangle.Empty, false));
+        Assert.Null(DimPolicy.SpotlightHole(spotlightOn: false, "D1", "D1", window, false));
+        Assert.Null(DimPolicy.SpotlightHole(spotlightOn: true, "D1", "D1", window, isFullscreen: true));
+        Assert.Null(DimPolicy.SpotlightHole(spotlightOn: true, "D1", "D2", window, false));
+        Assert.Null(DimPolicy.SpotlightHole(spotlightOn: true, null, "D1", window, false));
+        Assert.Null(DimPolicy.SpotlightHole(spotlightOn: true, "D1", "D1", Rectangle.Empty, false));
     }
+
+    [Fact]
+    public void One_monitor_always_uses_the_spotlight_because_nothing_else_can_dim()
+    {
+        var off = new Settings { Spotlight = false };
+        Assert.True(DimPolicy.SpotlightOn(off, monitorCount: 1));
+        Assert.False(DimPolicy.SpotlightOn(off, monitorCount: 2));
+        Assert.True(DimPolicy.SpotlightOn(new Settings { Spotlight = true }, monitorCount: 3));
+    }
+
+    [Theory]
+    [InlineData(0, false)]
+    [InlineData(1, false)]
+    [InlineData(2, true)]
+    [InlineData(3, true)]
+    public void Backlight_needs_a_second_monitor(int monitors, bool available) =>
+        Assert.Equal(available, DimPolicy.BacklightAvailable(monitors));
 
     [Fact]
     public void Hole_is_converted_to_overlay_coordinates_on_offset_monitors()

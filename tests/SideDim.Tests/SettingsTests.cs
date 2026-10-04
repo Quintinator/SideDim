@@ -85,8 +85,19 @@ public sealed class SettingsTests : IDisposable
         Assert.Equal(100, s.BacklightLevel);
         Assert.Equal(0, s.OverlayStrength);
         Assert.Equal(0, s.DimDelayMs);
-        Assert.InRange(s.RestoreDelayMs, 0, 10_000);
+        Assert.Equal(Settings.MaxDelayMs, s.RestoreDelayMs);
         Assert.Equal(0, s.FadeMs);
+    }
+
+    [Fact]
+    public void Upper_limits_are_exactly_what_the_readme_promises()
+    {
+        File.WriteAllText(FilePath, """{ "BacklightLevel": 101, "OverlayStrength": 100, "DimDelayMs": 99999, "FadeMs": 99999 }""");
+        var s = Settings.Load(FilePath);
+        Assert.Equal(100, s.BacklightLevel);
+        Assert.Equal(95, s.OverlayStrength);  // never fully black: a stuck overlay must not hide a screen
+        Assert.Equal(10_000, s.DimDelayMs);
+        Assert.Equal(2_000, s.FadeMs);
     }
 
     [Fact]
@@ -95,9 +106,10 @@ public sealed class SettingsTests : IDisposable
         File.WriteAllText(FilePath, """{ "Apps": null, "NeverDimFor": null, "ToggleHotkey": null }""");
         var s = Settings.Load(FilePath);
 
-        Assert.NotNull(s.Apps);
-        Assert.Contains("explorer", s.NeverDimFor);
-        Assert.Equal("Ctrl+Alt+D", s.ToggleHotkey);
+        Assert.Empty(s.Apps);
+        Assert.Empty(s.NeverDimFor);
+        Assert.True(s.IsNeverDim("explorer")); // built-ins still apply
+        Assert.Equal(Settings.DefaultHotkey, s.ToggleHotkey);
     }
 
     [Fact]
@@ -107,6 +119,69 @@ public sealed class SettingsTests : IDisposable
         var s = Settings.Load(FilePath);
         Assert.Equal(DimMode.Overlay, s.Mode);
         Assert.Equal(42, s.BacklightLevel);
+    }
+
+    [Fact]
+    public void Built_in_never_dim_entries_saved_by_older_versions_are_dropped_but_user_entries_kept()
+    {
+        File.WriteAllText(FilePath, """{ "NeverDimFor": ["explorer", "SnippingTool", "obs64"] }""");
+        var s = Settings.Load(FilePath);
+        Assert.Equal(["obs64"], s.NeverDimFor);
+        Assert.True(s.IsNeverDim("explorer"));
+        Assert.True(s.IsNeverDim("OBS64"));
+    }
+
+    [Fact]
+    public void A_saved_hotkey_is_kept_even_though_the_default_changed()
+    {
+        File.WriteAllText(FilePath, """{ "ToggleHotkey": "Ctrl+Alt+D" }""");
+        Assert.Equal("Ctrl+Alt+D", Settings.Load(FilePath).ToggleHotkey);
+    }
+
+    [Fact]
+    public void Hand_edits_with_comments_and_trailing_commas_are_accepted()
+    {
+        File.WriteAllText(FilePath, """
+            {
+              // darker please
+              "OverlayStrength": 90,
+              "Apps": ["cs2",],
+            }
+            """);
+        var s = Settings.Load(FilePath);
+        Assert.Equal(90, s.OverlayStrength);
+        Assert.Equal(["cs2"], s.Apps);
+    }
+
+    [Fact]
+    public void A_locked_file_is_left_alone_and_defaults_are_used_for_now()
+    {
+        File.WriteAllText(FilePath, """{ "OverlayStrength": 90 }""");
+        using (new FileStream(FilePath, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            var s = Settings.Load(FilePath);
+            Assert.Equal(70, s.OverlayStrength);
+            Assert.False(s.IsFirstRun);
+        }
+        Assert.Empty(Directory.GetFiles(_dir.Path, "settings.json.broken*"));
+        Assert.Equal(90, Settings.Load(FilePath).OverlayStrength); // nothing was overwritten
+    }
+
+    [Fact]
+    public void Changes_made_after_a_failed_load_never_silently_replace_the_unread_file()
+    {
+        File.WriteAllText(FilePath, """{ "Apps": ["cs2"] }""");
+        Settings s;
+        using (new FileStream(FilePath, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            s = Settings.Load(FilePath);
+            s.Enabled = false;
+            Assert.False(s.Save(FilePath)); // still locked: refuse rather than clobber
+        }
+
+        Assert.True(s.Save(FilePath));    // unlocked: the unread file is set aside first
+        var aside = Directory.GetFiles(_dir.Path, "settings.json.unread-*").Single();
+        Assert.Contains("cs2", File.ReadAllText(aside));
     }
 
     [Fact]
@@ -146,6 +221,10 @@ public sealed class SettingsTests : IDisposable
     [InlineData("cs2.exe", "cs2")]
     [InlineData("  cs2  ", "cs2")]
     [InlineData("Code - Insiders.exe", "Code - Insiders")]
+    [InlineData("Battle.net", "Battle.net")]
+    [InlineData(@"C:\Program Files (x86)\Battle.net\Battle.net.exe", "Battle.net")]
+    [InlineData("Minecraft.Windows", "Minecraft.Windows")]
+    [InlineData(" CS2.EXE ", "CS2")]
     public void AppName_normalizes_entries(string entry, string expected) =>
         Assert.Equal(expected, Settings.AppName(entry));
 }

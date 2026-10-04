@@ -3,7 +3,8 @@ namespace SideDim.Tests;
 /// <summary>The threaded wrapper that keeps slow DDC/CI calls off the UI thread.</summary>
 public class HardwareDimmerTests
 {
-    private static Monitor Screen(string device) => new(IntPtr.Zero, device, Rectangle.Empty);
+    // Device and Id differ on purpose: saved brightness must be keyed by the stable Id, not \\.\DISPLAYn.
+    private static Monitor Screen(string id) => new(IntPtr.Zero, Device: @"\\.\DISPLAY" + id, Id: id, Rectangle.Empty);
 
     [Fact]
     public void Applies_on_the_worker_and_restores_on_dispose()
@@ -11,11 +12,13 @@ public class HardwareDimmerTests
         var t = new Timeline();
         var monitors = new FakeMonitors(t).Add("D1", 70).Add("D2", 100);
         var level = 10;
-        var dimmer = new HardwareDimmer(new BacklightController(monitors, new FakeStore(t)), () => level);
+        var store = new FakeStore(t);
+        var dimmer = new HardwareDimmer(new BacklightController(monitors, store), () => level);
 
         dimmer.Apply([new DimTarget(Screen("D1"))]);
-        dimmer.Flush();
+        Assert.True(dimmer.Flush());
         Assert.Equal(10u, monitors.Brightness["D1"]);
+        Assert.Equal(["D1"], store.Saved.Keys);
         Assert.Equal(100u, monitors.Brightness["D2"]);
 
         dimmer.Dispose();
@@ -32,7 +35,7 @@ public class HardwareDimmerTests
 
         level = 40;
         dimmer.Apply([new DimTarget(Screen("D1"))]);
-        dimmer.Flush();
+        Assert.True(dimmer.Flush());
         Assert.Equal(40u, monitors.Brightness["D1"]);
     }
 
@@ -45,7 +48,7 @@ public class HardwareDimmerTests
 
         dimmer.Apply([new DimTarget(Screen("D1"))]); // throws inside the worker
         dimmer.Apply([new DimTarget(Screen("D1"))]);
-        dimmer.Flush();
+        Assert.True(dimmer.Flush());
         Assert.Equal(10u, monitors.Inner.Brightness["D1"]);
     }
 

@@ -1,0 +1,6 @@
+<Project>
+  <!-- Applies to every build path (dotnet build/test, Visual Studio, build.ps1), so a green local build means a green CI build. -->
+  <PropertyGroup>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+</Project>

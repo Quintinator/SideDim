@@ -3,7 +3,11 @@ using System.Diagnostics;
 
 namespace SideDim;
 
-/// <summary>Every control writes straight into Settings and applies immediately; there is no OK/Cancel.</summary>
+/// <summary>
+/// Every control writes straight into Settings; there is no OK/Cancel. Sliders commit 250 ms after they
+/// stop moving. The hotkey box pauses the global hotkey while it has focus and registers the new one when
+/// it loses focus.
+/// </summary>
 internal sealed class SettingsForm : Form
 {
     private static readonly TimeSpan SliderSettle = TimeSpan.FromMilliseconds(250);
@@ -12,6 +16,7 @@ internal sealed class SettingsForm : Form
     private readonly ISettingsHost _host;
     private readonly IContainer _components = new Container();
     private readonly System.Windows.Forms.Timer _sliderCommit;
+    private readonly Font? _uiFont = SystemFonts.MessageBoxFont; // a new Font each call, so ours to dispose
     private readonly Font _headerFont;
     private readonly Icon _windowIcon;
     private readonly List<Image> _appImages = [];
@@ -41,14 +46,23 @@ internal sealed class SettingsForm : Form
     private readonly TrackBar _overlay = new() { Minimum = 0, Maximum = Settings.MaxOverlayStrength, TickFrequency = 10, SmallChange = 1, LargeChange = 10, AutoSize = false };
     private readonly Label _overlayValue = new() { AutoSize = true };
     private readonly CheckBox _spotlight = new() { Text = "Also darken around the window on its own screen", AutoSize = true };
+    private readonly Label _singleMonitorNote = new()
+    {
+        Text = "One monitor connected: SideDim darkens around the focused window." + Environment.NewLine
+             + "Backlight dimming needs a second monitor.",
+        AutoSize = true,
+        ForeColor = SystemColors.GrayText,
+    };
     private readonly CheckBox _test = new() { Text = "Test: dim around this window", Appearance = Appearance.Button, AutoSize = true };
 
-    private readonly NumericUpDown _delay = new() { Minimum = 0, Maximum = Settings.MaxDelayMs, Increment = 100, Width = 70 };
-    private readonly TextBox _hotkey = new() { ReadOnly = true, Width = 120, BackColor = SystemColors.Window };
+    private readonly NumericUpDown _delay = new() { Minimum = 0, Maximum = Settings.MaxDelayMs, Increment = 100 };
+    private readonly TextBox _hotkey = new() { ReadOnly = true, BackColor = SystemColors.Window };
     private readonly Label _hotkeyStatus = new() { AutoSize = true, ForeColor = Color.Firebrick };
     private readonly CheckBox _autostart = new() { Text = "Start with Windows", AutoSize = true };
 
+    private static string? s_lastBrowseFolder;
     private bool _loading;
+    private bool _dimNowStartedHere; // closing the window only stops a "Dim now" that its own Test button started
 
     public SettingsForm(Settings settings, ISettingsHost host)
     {
@@ -59,7 +73,7 @@ internal sealed class SettingsForm : Form
         Text = "SideDim";
         _windowIcon = AppIcon.Load(SystemInformation.IconSize);
         Icon = _windowIcon;
-        Font = SystemFonts.MessageBoxFont ?? Font;
+        Font = _uiFont ?? Font;
         _headerFont = new Font(Font.FontFamily, Font.Size * 1.1f, FontStyle.Bold);
         AutoScaleMode = AutoScaleMode.Dpi;
         FormBorderStyle = FormBorderStyle.FixedSingle;
@@ -83,6 +97,8 @@ internal sealed class SettingsForm : Form
         _icons.ImageSize = new Size(iconSize, iconSize);
         _apps.SmallImageList = _icons;
         _backlight.Size = _overlay.Size = new Size(LogicalToDeviceUnits(260), LogicalToDeviceUnits(32));
+        _delay.Width = LogicalToDeviceUnits(70);
+        _hotkey.Width = LogicalToDeviceUnits(160); // fits names like Ctrl+Alt+Shift+OemQuestion
 
         var root = new FlowLayoutPanel
         {
@@ -103,6 +119,7 @@ internal sealed class SettingsForm : Form
 
         root.Controls.Add(Header("How to dim"));
         root.Controls.Add(Row(_modeOverlay, _modeHardware, _modeBoth));
+        root.Controls.Add(_singleMonitorNote);
         root.Controls.Add(Row(Caption("Backlight while dimmed"), _backlight, _backlightValue));
         root.Controls.Add(Row(Caption("Overlay darkness"), _overlay, _overlayValue));
         root.Controls.Add(_spotlight);
@@ -129,7 +146,8 @@ internal sealed class SettingsForm : Form
         tip.SetToolTip(_backlight, "Monitor brightness (0-100) while dimmed. Screens already darker than this are left alone.");
         tip.SetToolTip(_spotlight, "Uses an overlay on the focused screen, with a hole for the window. Follows the window around.");
         tip.SetToolTip(_test, "Uses this settings window as the game, so you can tune everything live. Click again to stop.");
-        tip.SetToolTip(_hotkey, "Click here and press a key combination with Ctrl or Alt, or a function key.");
+        tip.SetToolTip(_hotkey, "Click here and press a key combination with Ctrl or Alt, for example Ctrl+Alt+F9.");
+        tip.SetToolTip(_autostart, "Starts SideDim in the tray when you log in.");
 
         Controls.Add(root);
     }
@@ -181,8 +199,8 @@ internal sealed class SettingsForm : Form
         _modeBoth.Checked = _s.Mode == DimMode.Both;
         _backlight.Value = Math.Clamp(_s.BacklightLevel, _backlight.Minimum, _backlight.Maximum);
         _overlay.Value = Math.Clamp(_s.OverlayStrength, _overlay.Minimum, _overlay.Maximum);
-        _spotlight.Checked = _s.Spotlight;
-        _test.Checked = _host.IsTesting;
+        _spotlight.Checked = _s.Spotlight || IsSingleMonitor;
+        _test.Checked = _host.IsDimNowOn;
         _delay.Value = Math.Clamp(_s.DimDelayMs, (int)_delay.Minimum, (int)_delay.Maximum);
         _hotkey.Text = _s.ToggleHotkey;
         _autostart.Checked = Autostart.IsOn;
@@ -221,7 +239,7 @@ internal sealed class SettingsForm : Form
 
     private static Bitmap? ExeIcon(string path)
     {
-        if (!File.Exists(path)) return null;
+        if (!Path.IsPathRooted(path) || AppPicker.IsNetworkPath(path)) return null;
         try
         {
             using var icon = Icon.ExtractAssociatedIcon(path);
@@ -229,7 +247,7 @@ internal sealed class SettingsForm : Form
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
         {
-            return null;
+            return null; // missing or unreadable exe: the generic icon will do
         }
     }
 
@@ -242,8 +260,16 @@ internal sealed class SettingsForm : Form
         _modeHardware.CheckedChanged += (_, _) => { if (_modeHardware.Checked) Commit(() => _s.Mode = DimMode.Hardware); };
         _modeBoth.CheckedChanged += (_, _) => { if (_modeBoth.Checked) Commit(() => _s.Mode = DimMode.Both); };
         _spotlight.CheckedChanged += (_, _) => Commit(() => _s.Spotlight = _spotlight.Checked);
-        _delay.ValueChanged += (_, _) => Commit(() => _s.DimDelayMs = (int)_delay.Value);
-        _autostart.CheckedChanged += (_, _) => { if (!_loading) Autostart.IsOn = _autostart.Checked; };
+        _delay.ValueChanged += (_, _) => OnSliderMoved(); // each arrow click would otherwise save the file
+        _autostart.CheckedChanged += (_, _) =>
+        {
+            if (_loading || Autostart.TrySet(_autostart.Checked)) return;
+            _loading = true;
+            _autostart.Checked = Autostart.IsOn;
+            _loading = false;
+            MessageBox.Show(this, "Windows did not allow changing Start with Windows. See the log for details.", "SideDim",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        };
 
         // Sliders update the label live but only commit once you stop moving them:
         // every DDC/CI write is a slow bus transaction, no point sending fifty of them.
@@ -251,8 +277,14 @@ internal sealed class SettingsForm : Form
         _overlay.ValueChanged += (_, _) => OnSliderMoved();
         _sliderCommit.Tick += (_, _) => CommitSliders();
 
-        _test.CheckedChanged += (_, _) => { if (!_loading && _test.Checked != _host.IsTesting) _host.ToggleTest(); };
-        _host.TestingChanged += SyncTestButton;
+        _test.CheckedChanged += (_, _) =>
+        {
+            if (_loading || _test.Checked == _host.IsDimNowOn) return;
+            _host.ToggleTest();
+            _dimNowStartedHere = _host.IsDimNowOn;
+        };
+        _host.DimNowChanged += SyncDimNowButton;
+        _host.DisplaysChanged += OnDisplaysChanged;
 
         _apps.SelectedIndexChanged += (_, _) => UpdateEnabledStates();
         _apps.KeyDown += (_, e) => { if (e.KeyCode == Keys.Delete) RemoveSelected(); };
@@ -260,8 +292,9 @@ internal sealed class SettingsForm : Form
         _addExe.Click += (_, _) => BrowseForExe();
         _addRunning.Click += (_, _) => ShowRunningApps();
 
-        _hotkey.Enter += (_, _) => _host.SuspendHotkey(true);
-        _hotkey.Leave += (_, _) =>
+        // Focus events (not Enter/Leave) so alt-tabbing away from the box also turns the hotkey back on.
+        _hotkey.GotFocus += (_, _) => _host.SuspendHotkey(true);
+        _hotkey.LostFocus += (_, _) =>
         {
             _host.SuspendHotkey(false);
             UpdateHotkeyStatus();
@@ -274,7 +307,7 @@ internal sealed class SettingsForm : Form
         if (_loading) return;
         change();
         UpdateEnabledStates();
-        _host.SettingsChanged();
+        _host.SaveAndApplySettings();
     }
 
     private void OnSliderMoved()
@@ -292,6 +325,7 @@ internal sealed class SettingsForm : Form
         {
             _s.BacklightLevel = _backlight.Value;
             _s.OverlayStrength = _overlay.Value;
+            _s.DimDelayMs = (int)_delay.Value;
         });
     }
 
@@ -304,20 +338,36 @@ internal sealed class SettingsForm : Form
     private void UpdateHotkeyStatus() =>
         _hotkeyStatus.Text = _host.HotkeyWorks ? "" : "In use by another app, pick another";
 
+    private bool IsSingleMonitor => !DimPolicy.BacklightAvailable(_host.MonitorCount);
+
     private void UpdateEnabledStates()
     {
         var apps = _triggerApps.Checked;
         _apps.Enabled = _addExe.Enabled = _addRunning.Enabled = _alsoFullscreen.Enabled = apps;
         _remove.Enabled = apps && _apps.SelectedItems.Count > 0;
 
-        _backlight.Enabled = !_modeOverlay.Checked;
-        _overlay.Enabled = !_modeHardware.Checked || _spotlight.Checked;
+        // With one monitor only the spotlight overlay can do anything. The saved mode is left alone,
+        // so a second monitor brings the user's choice back.
+        var single = IsSingleMonitor;
+        _singleMonitorNote.Visible = single;
+        _modeHardware.Enabled = _modeBoth.Enabled = _spotlight.Enabled = !single;
+        _backlight.Enabled = !single && !_modeOverlay.Checked;
+        _overlay.Enabled = single || !_modeHardware.Checked || _spotlight.Checked;
     }
 
-    private void SyncTestButton()
+    private void OnDisplaysChanged()
     {
         _loading = true;
-        _test.Checked = _host.IsTesting;
+        _spotlight.Checked = _s.Spotlight || IsSingleMonitor;
+        _loading = false;
+        UpdateEnabledStates();
+    }
+
+    private void SyncDimNowButton()
+    {
+        if (!_host.IsDimNowOn) _dimNowStartedHere = false;
+        _loading = true;
+        _test.Checked = _host.IsDimNowOn;
         _loading = false;
     }
 
@@ -325,7 +375,14 @@ internal sealed class SettingsForm : Form
     {
         if (!_s.AddApp(entry)) return;
         ReloadApps();
-        _host.SettingsChanged();
+        _host.SaveAndApplySettings();
+    }
+
+    private void RemoveApp(string name)
+    {
+        if (!_s.RemoveApp(name)) return;
+        ReloadApps();
+        _host.SaveAndApplySettings();
     }
 
     private void RemoveSelected()
@@ -333,46 +390,40 @@ internal sealed class SettingsForm : Form
         if (_apps.SelectedItems.Count == 0) return;
         foreach (ListViewItem item in _apps.SelectedItems) _s.RemoveApp((string)item.Tag!);
         ReloadApps();
-        _host.SettingsChanged();
+        _host.SaveAndApplySettings();
     }
 
     private void BrowseForExe()
     {
         using var dlg = new OpenFileDialog { Filter = "Programs (*.exe)|*.exe", Title = "Pick the game or app to dim for" };
-        if (SteamLibraries.BiggestGamesFolder() is { } steam) dlg.InitialDirectory = steam;
-        if (dlg.ShowDialog(this) == DialogResult.OK) AddApp(dlg.FileName);
+        // Where the user browsed last time, or the Steam library the first time.
+        if ((s_lastBrowseFolder ?? SteamLibraries.BiggestGamesFolder()) is { } start) dlg.InitialDirectory = start;
+        if (dlg.ShowDialog(this) != DialogResult.OK) return;
+        s_lastBrowseFolder = Path.GetDirectoryName(dlg.FileName);
+        AddApp(dlg.FileName);
     }
 
     private void ShowRunningApps()
     {
         var menu = new ContextMenuStrip { ImageScalingSize = _icons.ImageSize };
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var p in Process.GetProcesses().OrderBy(p => p.ProcessName, StringComparer.OrdinalIgnoreCase))
+        foreach (var app in AppPicker.Pickable(ForegroundWatcher.VisibleApps(), Environment.ProcessId, _s))
         {
-            using (p)
+            var path = app.Path;
+            var listed = Settings.ListContains(_s.Apps, app.Name);
+            var title = app.Title.Length > 50 ? app.Title[..50] + "…" : app.Title;
+            var item = new ToolStripMenuItem($"{app.Name}   ({title})")
             {
-                try
-                {
-                    if (p.Id == Environment.ProcessId || p.MainWindowHandle == IntPtr.Zero || string.IsNullOrWhiteSpace(p.MainWindowTitle)) continue;
-                    if (!seen.Add(p.ProcessName) || Settings.ListContains(_s.NeverDimFor, p.ProcessName)) continue;
-
-                    var path = Native.ProcessPath((uint)p.Id);
-                    var title = p.MainWindowTitle.Length > 50 ? p.MainWindowTitle[..50] + "…" : p.MainWindowTitle;
-                    var item = new ToolStripMenuItem($"{p.ProcessName}   ({title})")
-                    {
-                        Checked = Settings.ListContains(_s.Apps, p.ProcessName),
-                        Image = path is null ? null : ExeIcon(path),
-                    };
-                    var entry = path ?? p.ProcessName;
-                    item.Click += (_, _) => AddApp(entry);
-                    menu.Items.Add(item);
-                }
-                catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception)
-                {
-                    // The process exited while we looked at it, or we may not query it.
-                }
-            }
+                Checked = listed,
+                Image = path is null ? null : ExeIcon(path),
+            };
+            var entry = path ?? app.Name;
+            // Same toggle behaviour as the tray's "Dim for" item: click again to remove.
+            item.Click += (_, _) =>
+            {
+                if (listed) RemoveApp(app.Name);
+                else AddApp(entry);
+            };
+            menu.Items.Add(item);
         }
 
         if (menu.Items.Count == 0) menu.Items.Add(new ToolStripMenuItem("No windowed apps running") { Enabled = false });
@@ -396,10 +447,11 @@ internal sealed class SettingsForm : Form
 
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
-        _host.TestingChanged -= SyncTestButton;
+        _host.DimNowChanged -= SyncDimNowButton;
+        _host.DisplaysChanged -= OnDisplaysChanged;
         if (_sliderCommit.Enabled) CommitSliders();
-        if (_host.IsTesting) _host.ToggleTest();
-        if (_hotkey.Focused) _host.SuspendHotkey(false);
+        if (_dimNowStartedHere && _host.IsDimNowOn) _host.ToggleTest();
+        _host.SuspendHotkey(false); // harmless if it wasn't suspended
         base.OnFormClosed(e);
     }
 
@@ -409,10 +461,15 @@ internal sealed class SettingsForm : Form
         {
             _components.Dispose();
             _icons.Dispose();
-            foreach (var image in _appImages) image.Dispose();
-            _headerFont.Dispose();
-            _windowIcon.Dispose();
         }
         base.Dispose(disposing);
+        if (disposing)
+        {
+            // After the controls are gone, so nothing paints with a disposed font or icon.
+            foreach (var image in _appImages) image.Dispose();
+            _headerFont.Dispose();
+            _uiFont?.Dispose();
+            _windowIcon.Dispose();
+        }
     }
 }

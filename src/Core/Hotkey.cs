@@ -21,7 +21,10 @@ internal readonly record struct Hotkey(HotkeyModifiers Modifiers, Keys Key)
         Keys.LWin, Keys.RWin,
     ];
 
-    /// <summary>Parses text like "Ctrl+Alt+D". Exactly one non-modifier key is required.</summary>
+    /// <summary>
+    /// Parses text like "Ctrl+Alt+F9". Exactly one non-modifier key is required, plus Ctrl, Alt or Win:
+    /// a global hotkey swallows its keys in every app, so bare keys and Shift-only combos are refused.
+    /// </summary>
     public static bool TryParse(string? text, out Hotkey hotkey)
     {
         hotkey = default;
@@ -43,26 +46,31 @@ internal readonly record struct Hotkey(HotkeyModifiers Modifiers, Keys Key)
             key = parsed;
         }
 
-        if (key is null) return false;
+        if (key is null || !IsSafe(mods, key.Value)) return false;
         hotkey = new Hotkey(mods, key.Value);
         return true;
     }
 
+    private static bool IsSafe(HotkeyModifiers mods, Keys key)
+    {
+        if ((mods & (HotkeyModifiers.Ctrl | HotkeyModifiers.Alt | HotkeyModifiers.Win)) == 0) return false;
+        return !(mods == HotkeyModifiers.Alt && key == Keys.F4); // would stop every window from closing
+    }
+
     /// <summary>
     /// Turns a key press in the hotkey box into a hotkey, or null if it isn't one (yet).
-    /// A letter without Ctrl or Alt is refused, because it would swallow that key in every app.
+    /// A global hotkey swallows its keys in every app, so it needs Ctrl or Alt: a bare F5 would steal
+    /// quicksave from games, and Alt+F4 would stop windows from closing.
     /// </summary>
     public static Hotkey? FromKeyPress(Keys key, bool ctrl, bool alt, bool shift)
     {
         if (ModifierKeys.Contains(key) || key == Keys.None) return null;
-        var isFunctionKey = key is >= Keys.F1 and <= Keys.F24;
-        if (!ctrl && !alt && !isFunctionKey) return null;
 
         var mods = HotkeyModifiers.None;
         if (ctrl) mods |= HotkeyModifiers.Ctrl;
         if (alt) mods |= HotkeyModifiers.Alt;
         if (shift) mods |= HotkeyModifiers.Shift;
-        return new Hotkey(mods, key);
+        return IsSafe(mods, key) ? new Hotkey(mods, key) : null;
     }
 
     public override string ToString()
@@ -78,9 +86,9 @@ internal readonly record struct Hotkey(HotkeyModifiers Modifiers, Keys Key)
 
     private static bool IsKeyName(string text, out Keys key)
     {
-        // Enum.TryParse also accepts numbers ("42") and flag combinations; only real key names count.
+        // Enum.TryParse also accepts numbers ("42") and comma lists of flags ("A,B"); only real key names count.
         key = Keys.None;
-        if (text.All(char.IsDigit)) return false;
+        if (text.All(char.IsDigit) || text.Contains(',')) return false;
         if (!Enum.TryParse(text, ignoreCase: true, out key)) return false;
         return key != Keys.None && (key & Keys.Modifiers) == 0 && Enum.IsDefined(key) && !ModifierKeys.Contains(key);
     }

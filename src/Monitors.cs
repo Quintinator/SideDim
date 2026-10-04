@@ -2,8 +2,9 @@ using System.Runtime.InteropServices;
 
 namespace SideDim;
 
-/// <summary>A display as Windows sees it. Device is the key used everywhere (\\.\DISPLAY1 etc).</summary>
-internal sealed record Monitor(IntPtr Handle, string Device, Rectangle Bounds);
+/// <param name="Device">GDI name like \\.\DISPLAY1. Fine within a session, but Windows can renumber it after a replug.</param>
+/// <param name="Id">Stable per physical monitor and port, so saved brightness is keyed by this.</param>
+internal sealed record Monitor(IntPtr Handle, string Device, string Id, Rectangle Bounds);
 
 internal static class Monitors
 {
@@ -25,8 +26,17 @@ internal static class Monitors
     {
         var info = new Native.MONITORINFOEX { cbSize = Marshal.SizeOf<Native.MONITORINFOEX>() };
         return Native.GetMonitorInfo(hMonitor, ref info)
-            ? new Monitor(hMonitor, info.szDevice, info.rcMonitor.ToRectangle())
+            ? new Monitor(hMonitor, info.szDevice, StableId(info.szDevice), info.rcMonitor.ToRectangle())
             : null;
+    }
+
+    /// <summary>The monitor's device interface path (\\?\DISPLAY#...); the GDI name if Windows won't say.</summary>
+    private static string StableId(string device)
+    {
+        var dd = new Native.DISPLAY_DEVICE { cb = Marshal.SizeOf<Native.DISPLAY_DEVICE>() };
+        return Native.EnumDisplayDevices(device, 0, ref dd, Native.EDD_GET_DEVICE_INTERFACE_NAME) && dd.DeviceID.Length > 0
+            ? dd.DeviceID
+            : device;
     }
 }
 
@@ -66,9 +76,10 @@ internal sealed class DdcBrightnessDevice : IBrightnessDevice
             : null);
 
     /// <summary>Which monitors answer DDC/CI and their brightness, for --probe.</summary>
-    public Dictionary<string, uint?> Probe() => Monitors.All().ToDictionary(m => m.Device, m => Read(m.Device));
+    public Dictionary<string, uint?> Probe() => Monitors.All().ToDictionary(m => m.Device, m => Read(m.Id));
 
-    private static Monitor? Find(string device) => Monitors.All().FirstOrDefault(m => m.Device == device);
+    /// <summary>By stable id, or by GDI name for state files written by version 0.1.0.</summary>
+    private static Monitor? Find(string key) => Monitors.All().FirstOrDefault(m => m.Id == key || m.Device == key);
 
     /// <summary>Runs fn against each physical monitor behind an HMONITOR; returns the first non-null answer.</summary>
     private static T? WithPhysical<T>(IntPtr hMonitor, Func<IntPtr, T?> fn)
@@ -87,6 +98,7 @@ internal sealed class DdcBrightnessDevice : IBrightnessDevice
                 {
                     Thread.Sleep(RetryPause);
                     r = fn(p.hPhysicalMonitor);
+                    if (r is null) Log.Write($"DDC/CI call to '{p.szPhysicalMonitorDescription}' failed twice (error {Marshal.GetLastPInvokeError()}).");
                 }
                 answer ??= r;
             }

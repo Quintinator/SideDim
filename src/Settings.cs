@@ -11,9 +11,18 @@ internal sealed class Settings
 {
     public const int MaxDelayMs = 10_000;
     public const int MaxFadeMs = 2_000;
+
+    /// <summary>Below 100 on purpose: a stuck topmost click-through overlay must never fully black out a screen.</summary>
     public const int MaxOverlayStrength = 95;
-    public const string DefaultHotkey = "Ctrl+Alt+D";
-    private static readonly string[] DefaultNeverDimFor = ["explorer", "ScreenClippingHost", "SnippingTool"];
+
+    // Ctrl+Alt+letter is AltGr+letter on many European layouts (AltGr+D types "ð" on US-International),
+    // so the default uses a function key, which never produces a character.
+    public const string DefaultHotkey = "Ctrl+Alt+F9";
+
+    /// <summary>Shell and screenshot tools that should never count as "the game". Always applied, never saved.</summary>
+    // ApplicationFrameHost only ever wraps a Store app, which SideDim resolves to the real app instead.
+    public static readonly IReadOnlyList<string> BuiltInNeverDimFor =
+        ["explorer", "ScreenClippingHost", "SnippingTool", "ShellExperienceHost", "SearchHost", "StartMenuExperienceHost", "ApplicationFrameHost"];
 
     public bool Enabled { get; set; } = true;
 
@@ -34,14 +43,14 @@ internal sealed class Settings
     /// <summary>Monitor brightness (0-100) while dimmed. A screen already below this is left alone.</summary>
     public int BacklightLevel { get; set; } = 10;
 
-    /// <summary>Overlay darkness, 0 = invisible, 95 = nearly black.</summary>
+    /// <summary>Overlay darkness, 0 = invisible, <see cref="MaxOverlayStrength"/> = nearly black.</summary>
     public int OverlayStrength { get; set; } = 70;
 
     /// <summary>Also darken the focused window's own screen, leaving a hole for the window (always overlay).</summary>
     public bool Spotlight { get; set; }
 
-    /// <summary>Process names that never trigger dimming.</summary>
-    public List<string> NeverDimFor { get; set; } = [.. DefaultNeverDimFor];
+    /// <summary>Extra process names that never trigger dimming, on top of <see cref="BuiltInNeverDimFor"/>.</summary>
+    public List<string> NeverDimFor { get; set; } = [];
 
     public int DimDelayMs { get; set; } = 800;
     public int RestoreDelayMs { get; set; } = 200;
@@ -51,46 +60,88 @@ internal sealed class Settings
 
     [JsonIgnore] public bool IsFirstRun { get; private set; }
 
+    /// <summary>Set when the file on disk couldn't be read; Save then refuses to overwrite it blindly.</summary>
+    [JsonIgnore] public bool LoadFailed { get; private set; }
+
     [JsonIgnore] public bool UsesBacklight => Mode is DimMode.Hardware or DimMode.Both;
 
     [JsonIgnore] public bool UsesOverlay => Mode is DimMode.Overlay or DimMode.Both;
 
-    private static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
+    // Hand edits are welcome, so be forgiving about trailing commas and // comments.
+    private static readonly JsonSerializerOptions Json = new()
+    {
+        WriteIndented = true,
+        AllowTrailingCommas = true,
+        ReadCommentHandling = JsonCommentHandling.Skip,
+    };
 
     public static Settings Load() => Load(AppPaths.SettingsFile);
 
     /// <summary>
-    /// Reads settings, repairing anything out of range. A file that can't be parsed is renamed to
-    /// settings.json.broken-* (so hand edits aren't lost) and replaced with defaults.
+    /// Reads settings, repairing anything out of range. A file that isn't valid JSON is renamed to
+    /// settings.json.broken-* (so hand edits aren't lost) and replaced with defaults. A file that can't
+    /// be read right now (locked, no access) is left alone and defaults are used for this session only.
     /// </summary>
     public static Settings Load(string path)
     {
-        Settings? loaded = null;
-        if (File.Exists(path))
-        {
-            try
-            {
-                loaded = JsonSerializer.Deserialize<Settings>(File.ReadAllText(path), Json);
-            }
-            catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException)
-            {
-                var backup = $"{path}.broken-{DateTime.Now:yyyyMMdd-HHmmss}";
-                Log.Write($"{Path.GetFileName(path)} is unreadable ({e.Message}); kept it as {Path.GetFileName(backup)} and using defaults.");
-                TryMove(path, backup);
-            }
-        }
+        if (!File.Exists(path)) return CreateDefaults(path);
 
-        var settings = (loaded ?? new Settings { IsFirstRun = true }).Normalize();
-        if (loaded is null) settings.Save(path);
+        try
+        {
+            return (JsonSerializer.Deserialize<Settings>(RetryRead.Text(path), Json) ?? new Settings()).Normalize();
+        }
+        catch (JsonException e)
+        {
+            var backup = $"{path}.broken-{DateTime.Now:yyyyMMdd-HHmmss}";
+            if (TryMove(path, backup))
+            {
+                Log.Write($"{Path.GetFileName(path)} is not valid JSON ({e.Message}); kept it as {Path.GetFileName(backup)} and using defaults.");
+                return CreateDefaults(path);
+            }
+            Log.Write($"{Path.GetFileName(path)} is not valid JSON ({e.Message}) and can't be moved aside; using defaults for this session.");
+            return new Settings { LoadFailed = true }.Normalize();
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Log.Write($"Could not read {Path.GetFileName(path)} ({e.Message}); using defaults for this session.");
+            return new Settings { LoadFailed = true }.Normalize();
+        }
+    }
+
+    private static Settings CreateDefaults(string path)
+    {
+        var settings = new Settings { IsFirstRun = true }.Normalize();
+        settings.Save(path);
         return settings;
     }
 
-    public void Save() => Save(AppPaths.SettingsFile);
+    public bool Save() => Save(AppPaths.SettingsFile);
 
-    public void Save(string path)
+    /// <summary>Writes the settings; failures are logged, never thrown, so a full disk can't crash the app.</summary>
+    public bool Save(string path)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        AtomicFile.WriteAllText(path, JsonSerializer.Serialize(this, Json));
+        if (LoadFailed)
+        {
+            // The real file was never read: set it aside before writing, or don't write at all.
+            if (File.Exists(path) && !TryMove(path, $"{path}.unread-{DateTime.Now:yyyyMMdd-HHmmss}"))
+            {
+                Log.Write($"Not saving: {Path.GetFileName(path)} couldn't be read at startup and is still locked.");
+                return false;
+            }
+            LoadFailed = false;
+        }
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            AtomicFile.WriteAllText(path, JsonSerializer.Serialize(this, Json));
+            return true;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Log.Write($"Could not save {Path.GetFileName(path)}: {e.Message}");
+            return false;
+        }
     }
 
     /// <summary>Brings hand-edited or older settings back into the ranges the app expects.</summary>
@@ -104,7 +155,8 @@ internal sealed class Settings
         if (!Enum.IsDefined(Mode)) Mode = DimMode.Overlay;
         if (!Enum.IsDefined(Trigger)) Trigger = DimTrigger.SelectedApps;
         if (!Hotkey.TryParse(ToggleHotkey, out _)) ToggleHotkey = DefaultHotkey;
-        NeverDimFor = NeverDimFor is null ? [.. DefaultNeverDimFor] : Distinct(NeverDimFor);
+        // Older files stored the built-in list; keep only what the user added, so new built-ins reach them.
+        NeverDimFor = NeverDimFor is null ? [] : Distinct(NeverDimFor.Where(n => n is not null && !ListContains(BuiltInNeverDimFor, AppName(n))));
         Apps = Apps is null ? [] : Distinct(Apps);
         return this;
     }
@@ -120,8 +172,17 @@ internal sealed class Settings
     public bool RemoveApp(string name) =>
         Apps.RemoveAll(a => string.Equals(AppName(a), AppName(name), StringComparison.OrdinalIgnoreCase)) > 0;
 
-    /// <summary>"C:\Games\cs2.exe", "cs2.exe" and "cs2" all become "cs2".</summary>
-    public static string AppName(string entry) => Path.GetFileNameWithoutExtension(entry.Trim());
+    public bool IsNeverDim(string process) => ListContains(BuiltInNeverDimFor, process) || ListContains(NeverDimFor, process);
+
+    /// <summary>
+    /// "C:\Games\cs2.exe", "cs2.exe" and "cs2" all become "cs2". Only ".exe" is stripped, so process
+    /// names that contain dots, like "Battle.net", survive intact.
+    /// </summary>
+    public static string AppName(string entry)
+    {
+        var name = Path.GetFileName(entry.Trim());
+        return name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? name[..^4] : name;
+    }
 
     public static bool ListContains(IEnumerable<string> list, string process) =>
         process.Length > 0 && list.Any(e => string.Equals(AppName(e), process, StringComparison.OrdinalIgnoreCase));
@@ -132,10 +193,18 @@ internal sealed class Settings
         .DistinctBy(AppName, StringComparer.OrdinalIgnoreCase)
         .ToList();
 
-    private static void TryMove(string from, string to)
+    private static bool TryMove(string from, string to)
     {
-        try { File.Move(from, to, overwrite: true); }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Log.Write($"Could not back up {from}: {e.Message}"); }
+        try
+        {
+            File.Move(from, to, overwrite: true);
+            return true;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Log.Write($"Could not back up {from}: {e.Message}");
+            return false;
+        }
     }
 }
 
@@ -154,86 +223,4 @@ internal sealed class LenientEnumConverter<T> : JsonConverter<T> where T : struc
 
     public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options) =>
         writer.WriteStringValue(value.ToString());
-}
-
-internal static class AppPaths
-{
-    public static string Folder { get; } =
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "SideDim");
-
-    public static string SettingsFile => Path.Combine(Folder, "settings.json");
-    public static string BrightnessStateFile => Path.Combine(Folder, "hardware-state.json");
-    public static string LogFile => Path.Combine(Folder, "sidedim.log");
-}
-
-internal static class AtomicFile
-{
-    /// <summary>Write to a temp file and swap it in, so a crash mid-write can't leave a half-written file.</summary>
-    public static void WriteAllText(string path, string contents)
-    {
-        var temp = path + ".tmp";
-        File.WriteAllText(temp, contents);
-        File.Move(temp, path, overwrite: true);
-    }
-}
-
-internal static class Log
-{
-    private const long MaxBytes = 512 * 1024;
-    private static readonly object Gate = new();
-
-    /// <summary>Where log lines go. Tests swap this out so they don't write to the real log.</summary>
-    public static Action<string> Sink { get; set; } = WriteToFile;
-
-    public static void Write(string message)
-    {
-        try { Sink(message); }
-        catch { /* logging must never take the app down */ }
-    }
-
-    private static void WriteToFile(string message)
-    {
-        lock (Gate)
-        {
-            Directory.CreateDirectory(AppPaths.Folder);
-            var path = AppPaths.LogFile;
-            if (File.Exists(path) && new FileInfo(path).Length > MaxBytes)
-                File.Move(path, path + ".old", overwrite: true); // keep one previous log for bug reports
-            File.AppendAllText(path, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} {message}{Environment.NewLine}");
-        }
-    }
-}
-
-internal static class Autostart
-{
-    private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
-    private const string ValueName = "SideDim";
-
-    private static string Command => $"\"{Environment.ProcessPath}\"";
-
-    public static bool IsOn
-    {
-        get
-        {
-            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RunKey);
-            return key?.GetValue(ValueName) is string;
-        }
-        set
-        {
-            using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(RunKey);
-            if (value) key.SetValue(ValueName, Command);
-            else key.DeleteValue(ValueName, throwOnMissingValue: false);
-        }
-    }
-
-    /// <summary>If autostart is on but points at an old location (the exe was moved), point it here.</summary>
-    public static void RepairPath()
-    {
-        using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RunKey, writable: true);
-        if (key?.GetValue(ValueName) is string current && !string.Equals(current, Command, StringComparison.OrdinalIgnoreCase))
-        {
-            key.SetValue(ValueName, Command);
-            Log.Write($"Autostart pointed at {current}; updated to {Command}");
-        }
-    }
 }

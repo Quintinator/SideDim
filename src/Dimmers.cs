@@ -61,6 +61,7 @@ internal sealed class OverlayDimmer(Func<Settings> settings) : IDimmer
         private int _duration;
         private bool _closeWhenDone;
         private Rectangle? _hole;
+        private Size _regionSize;
 
         public OverlayForm(Rectangle bounds)
         {
@@ -105,8 +106,10 @@ internal sealed class OverlayDimmer(Func<Settings> settings) : IDimmer
         /// <param name="hole">In overlay coordinates, or null to cover the whole monitor.</param>
         public void SetHole(Rectangle? hole)
         {
-            if (hole == _hole) return;
+            // Also rebuild when the monitor's resolution changed under an unchanged hole.
+            if (hole == _hole && (hole is null || Size == _regionSize)) return;
             _hole = hole;
+            _regionSize = Size;
             var old = Region;
             if (hole is { } h)
             {
@@ -184,7 +187,7 @@ internal sealed class HardwareDimmer : IDimmer
     public void Apply(IReadOnlyList<DimTarget> targets)
     {
         if (Volatile.Read(ref _disposed) != 0) return;
-        var devices = targets.Select(t => t.Monitor.Device).ToList();
+        var devices = targets.Select(t => t.Monitor.Id).ToList();
         var level = (uint)Math.Clamp(_level(), 0, 100);
         _queue.Add(() => _controller.Apply(devices, level));
     }
@@ -213,8 +216,8 @@ internal sealed class HardwareDimmer : IDimmer
         if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
         _queue.Add(_controller.RestoreAll);
         _queue.CompleteAdding();
-        if (!_worker.Join(TimeSpan.FromSeconds(5)))
-            Log.Write("Gave up waiting for monitors to restore; hardware-state.json will finish the job on next start.");
-        _queue.Dispose();
+        // Only dispose once the worker has really stopped; a hung DDC/CI bus must not break the exit path.
+        if (_worker.Join(TimeSpan.FromSeconds(5))) _queue.Dispose();
+        else Log.Write("Gave up waiting for monitors to restore; hardware-state.json will finish the job on next start.");
     }
 }

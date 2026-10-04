@@ -94,6 +94,27 @@ public class BacklightControllerTests
     }
 
     [Fact]
+    public void Monitor_without_ddc_is_reported_each_time_it_is_skipped()
+    {
+        _monitors.IgnoresDdc.Add("D1");
+        var reported = new List<string>();
+        var c = new BacklightController(_monitors, _store, reported.Add);
+        c.Apply(["D1"], level: 10);
+        c.Apply([], level: 10);
+        c.Apply(["D1"], level: 10);
+        Assert.Equal(["D1", "D1"], reported); // every attempt is reported; the UI decides what to show
+
+        _monitors.IgnoresDdc.Remove("D1"); // DDC/CI switched on in the monitor menu
+        c.Apply(["D1"], level: 10);
+        Assert.Equal(10u, _monitors.Brightness["D1"]);
+
+        c.Apply([], level: 10);
+        _monitors.IgnoresDdc.Add("D1");    // off again, or lost after sleep
+        c.Apply(["D1"], level: 10);
+        Assert.Equal(["D1", "D1", "D1"], reported);
+    }
+
+    [Fact]
     public void Store_is_empty_once_everything_is_restored()
     {
         var c = Create();
@@ -130,6 +151,33 @@ public class BacklightControllerTests
         c.Apply([], level: 10);
 
         Assert.Equal(80u, _monitors.Brightness["D1"]);
+    }
+
+    [Fact]
+    public void A_monitor_is_not_touched_when_its_brightness_cannot_be_backed_up()
+    {
+        _store.FailSaves = true;
+        var c = Create();
+        c.Apply(["D1"], level: 10);
+        Assert.Equal(100u, _monitors.Brightness["D1"]);
+        Assert.Equal(0, _monitors.Writes);
+        Assert.Empty(c.Originals);
+    }
+
+    [Fact]
+    public void Redimming_after_a_skipped_restore_writes_again()
+    {
+        var c = Create();
+        c.Apply(["D2"], level: 10);
+        _monitors.Connected.Remove("D2");
+        c.Apply([], level: 10);              // restore skipped: monitor gone
+
+        _monitors.Connected.Add("D2");
+        _monitors.Brightness["D2"] = 50;    // user changed it in the monitor menu meanwhile
+        c.Apply(["D2"], level: 10);
+        Assert.Equal(10u, _monitors.Brightness["D2"]);
+        c.Apply([], level: 10);
+        Assert.Equal(60u, _monitors.Brightness["D2"]); // still the original from before the first dim
     }
 
     [Fact]

@@ -6,7 +6,7 @@ internal static class DimPolicy
     public static bool ShouldDim(Settings s, string process, bool isFullscreen)
     {
         var known = process.Length > 0;
-        if (known && Settings.ListContains(s.NeverDimFor, process)) return false;
+        if (known && s.IsNeverDim(process)) return false;
         if (s.Trigger == DimTrigger.AnyWindow) return true;
         if (known && Settings.ListContains(s.Apps, process)) return true;
         return s.AlsoAnyFullscreen && isFullscreen;
@@ -23,13 +23,19 @@ internal static class DimPolicy
         return covers && !(isMaximized && hasCaption);
     }
 
+    /// <summary>With one monitor there's nothing beside it to dim, so the spotlight is the whole point.</summary>
+    public static bool SpotlightOn(Settings s, int monitorCount) => s.Spotlight || monitorCount == 1;
+
+    /// <summary>Backlight dimming only ever touches the other monitors, so it needs at least two.</summary>
+    public static bool BacklightAvailable(int monitorCount) => monitorCount > 1;
+
     /// <summary>
     /// The area to leave lit on the focused screen when spotlight is on, or null for no spotlight.
     /// A fullscreen window needs no spotlight: there's nothing around it to darken.
     /// </summary>
-    public static Rectangle? SpotlightHole(Settings s, string? keptBright, string? windowMonitor, Rectangle window, bool isFullscreen)
+    public static Rectangle? SpotlightHole(bool spotlightOn, string? keptBright, string? windowMonitor, Rectangle window, bool isFullscreen)
     {
-        if (!s.Spotlight || keptBright is null || windowMonitor != keptBright) return null;
+        if (!spotlightOn || keptBright is null || windowMonitor != keptBright) return null;
         if (isFullscreen || window.IsEmpty) return null;
         return window;
     }

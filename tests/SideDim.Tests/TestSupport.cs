@@ -49,12 +49,17 @@ internal sealed class FakeStore(Timeline timeline) : IBrightnessStore
 {
     public Dictionary<string, uint> Saved { get; private set; } = [];
 
+    /// <summary>Simulates a full disk or a locked file.</summary>
+    public bool FailSaves { get; set; }
+
     public Dictionary<string, uint> Load() => new(Saved);
 
-    public void Save(IReadOnlyDictionary<string, uint> originals)
+    public bool Save(IReadOnlyDictionary<string, uint> originals)
     {
+        if (FailSaves) return false;
         Saved = new Dictionary<string, uint>(originals);
         timeline.Events.Add($"save {string.Join(",", Saved.OrderBy(p => p.Key).Select(p => $"{p.Key}={p.Value}"))}");
+        return true;
     }
 }
 

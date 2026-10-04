@@ -15,6 +15,8 @@
 
 SideDim is a small Windows tray app. When your game (or any window you choose) has focus, every other monitor goes dark. Alt-tab out and they come back at the brightness they had before.
 
+Only one screen? SideDim works there too: it darkens everything around the focused window, so only your game or video stays lit.
+
 <p align="center">
   <img src="docs/screenshot.png" width="430" alt="The SideDim settings window">
 </p>
@@ -31,9 +33,10 @@ SideDim is a small Windows tray app. When your game (or any window you choose) h
   | Monitor backlight | Turns the monitor's real brightness down over DDC/CI | Less light in the room |
   | Both | Backlight down plus the overlay on top | As dark as it gets without turning screens off |
 - **Spotlight.** Also darkens the focused window's own screen, leaving only the window lit. The cut-out follows the window when you move it.
+- **Works on a single monitor.** With one screen there's nothing beside it to dim, so SideDim turns the spotlight on by itself. The backlight options need a second monitor, so they're greyed out until one is connected; your choice is kept and comes back when you plug one in.
 - **Two sliders.** One for the backlight level, one for overlay darkness. A screen you already turned down further is never brightened.
 - **Test button.** Uses the settings window as the "game", so you can tune everything live without starting one.
-- **Dim now hotkey.** `Ctrl+Alt+D` by default, for windowed games and videos. Pick any combination with Ctrl or Alt, or a function key.
+- **Dim now hotkey.** `Ctrl+Alt+F9` by default, for windowed games and videos. Any combination with Ctrl or Alt works; bare keys and Alt+F4 are refused so SideDim never steals keys from games.
 - **Your brightness comes back.** SideDim saves each monitor's brightness to disk before it changes anything. After a crash or power cut, the next start restores it. An unplugged monitor is restored when it comes back.
 - **Never steals focus.** Overlays can't be clicked or focused, so exclusive fullscreen games don't minimize.
 - **Start with Windows.** A toggle in the settings window and in the tray menu.
@@ -54,7 +57,7 @@ Windows 10 or 11. The exe isn't code signed yet, so SmartScreen may warn the fir
 |---|---|
 | Left-click the tray icon | Opens settings |
 | Right-click the tray icon | Settings, automatic dimming on/off, Dim now, Dim for *last app*, Start with Windows, Exit |
-| `Ctrl+Alt+D` | Dim now, press again to stop (changeable in settings) |
+| `Ctrl+Alt+F9` | Dim now, press again to stop (changeable in settings) |
 | Start the exe again | Opens the settings of the copy that's already running |
 
 ## Settings
@@ -67,15 +70,15 @@ Everything in the settings window applies immediately. Settings are stored in `%
 | `Trigger` | `SelectedApps` | `SelectedApps`: only for apps in the list. `AnyWindow`: for whatever window has focus |
 | `Apps` | `[]` | Exe paths or process names to dim for |
 | `AlsoAnyFullscreen` | `true` | With `SelectedApps`, also dim for any app that covers a whole monitor |
-| `Mode` | `Overlay` | `Overlay`, `Hardware` (backlight) or `Both` |
+| `Mode` | `Overlay` | `Overlay`, `Hardware` (backlight) or `Both`. With one monitor only the overlay is used |
 | `BacklightLevel` | `10` | Monitor brightness while dimmed, 0 to 100 |
 | `OverlayStrength` | `70` | Overlay darkness in percent, 0 to 95 |
-| `Spotlight` | `false` | Also darken around the focused window on its own screen |
-| `NeverDimFor` | `explorer`, `ScreenClippingHost`, `SnippingTool` | Apps that never trigger dimming (file only) |
+| `Spotlight` | `false` | Also darken around the focused window on its own screen. Always on when only one monitor is connected |
+| `NeverDimFor` | `[]` | Extra apps that never trigger dimming (file only). Explorer, the Start menu, search and the snipping tools are always excluded |
 | `DimDelayMs` | `800` | How long a window must have focus before dimming, so quick alt-tabs don't flicker |
 | `RestoreDelayMs` | `200` | How long before restoring after focus leaves (file only) |
 | `FadeMs` | `300` | Overlay fade time, 0 to 2000 (file only) |
-| `ToggleHotkey` | `Ctrl+Alt+D` | The Dim now hotkey |
+| `ToggleHotkey` | `Ctrl+Alt+F9` | The Dim now hotkey. A function key is the default because Ctrl+Alt+letter is AltGr+letter on many keyboard layouts |
 
 ## Command line
 
@@ -85,19 +88,19 @@ Everything in the settings window applies immediately. Settings are stored in `%
 
 ## Files
 
-All in `%APPDATA%\SideDim\` (there's a link at the bottom of the settings window):
+In `%APPDATA%\SideDim\` unless noted (there's a link at the bottom of the settings window):
 
 | File | Contents |
 |---|---|
 | `settings.json` | Your settings |
 | `sidedim.log` | What SideDim did and any errors. The previous log is kept as `sidedim.log.old`. |
-| `hardware-state.json` | Brightness to restore. Only exists while a screen is dimmed. |
+| `hardware-state.json` | Brightness to restore. Only exists while a screen is dimmed, and lives in `%LOCALAPPDATA%\SideDim\` because it belongs to this PC's monitors. |
 
 ## Troubleshooting
 
 - **Backlight mode does nothing on a screen.** Turn on DDC/CI in that monitor's on-screen menu, then run `SideDim.exe --probe`. Some monitors, docks and most laptop panels don't support DDC/CI; use Overlay for those.
 - **The hotkey shows "In use by another app".** Another program registered that combination first. Pick a different one.
-- **A screen stayed dark.** Start SideDim again: it restores whatever is in `hardware-state.json`. You can also set the brightness in the monitor's own menu.
+- **A screen stayed dark.** Start SideDim again: it restores whatever is in `%LOCALAPPDATA%\SideDim\hardware-state.json`. You can also set the brightness in the monitor's own menu.
 - **Anti-cheat.** SideDim never touches game processes. It only asks Windows which window has focus and which exe owns it.
 - **Something else?** [Open an issue](https://github.com/Quintinator/SideDim/issues) and include the output of `SideDim.exe --probe` and your `sidedim.log`.
 
