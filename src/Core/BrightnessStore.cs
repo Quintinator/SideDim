@@ -18,8 +18,15 @@ internal sealed class FileBrightnessStore(string path, string? legacyPath = null
         catch (JsonException e)
         {
             var aside = path + ".corrupt";
-            try { File.Move(path, aside, overwrite: true); }
-            catch (Exception m) when (m is IOException or UnauthorizedAccessException) { aside = path; }
+            try
+            {
+                File.Move(path, aside, overwrite: true);
+            }
+            catch (Exception m) when (m is IOException or UnauthorizedAccessException)
+            {
+                aside = path;
+                _readOnly = true;
+            }
             Log.Write($"{Path.GetFileName(path)} is unreadable ({e.Message}); kept as {Path.GetFileName(aside)}. "
                 + "If a screen stayed dark, set its brightness in the monitor's own menu.");
         }

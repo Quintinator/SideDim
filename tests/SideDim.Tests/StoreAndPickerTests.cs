@@ -55,6 +55,19 @@ public sealed class FileBrightnessStoreTests : IDisposable
     }
 
     [Fact]
+    public void A_corrupt_backup_that_cannot_be_moved_aside_is_never_overwritten()
+    {
+        File.WriteAllText(StatePath, "{ not json");
+        var store = new FileBrightnessStore(StatePath);
+        using (new FileStream(StatePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            Assert.Empty(store.Load());
+        }
+        Assert.False(store.Save(new Dictionary<string, uint> { ["D1"] = 100 }));
+        Assert.Equal("{ not json", File.ReadAllText(StatePath));
+    }
+
+    [Fact]
     public void Save_reports_failure_instead_of_throwing()
     {
         Directory.CreateDirectory(StatePath);
