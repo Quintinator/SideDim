@@ -2,6 +2,25 @@
 
 All notable changes to SideDim. Each `## [version]` section becomes the notes of that GitHub release.
 
+## [0.2.2] - 2026-10-04
+
+### Added
+
+- A warning when the Dim now hotkey would block a character. Windows treats Ctrl+Alt as AltGr, so a hotkey like `Ctrl+Alt+E` stops you typing é on a United States-International keyboard, or € on a German one. The settings window now says which character and keyboard are affected, and SideDim shows a one-time notification at startup if your current hotkey does this.
+- Clicking a SideDim notification opens the settings window.
+
+### Fixed
+
+- A key that .NET has no name for, such as the extra key on Brazilian ABNT keyboards, could be picked as the hotkey and then not work. It is now ignored in the hotkey box.
+
+### Downloads
+
+- `SideDim-0.2.2-win-x64.exe` runs on any Windows 10 or 11 PC (includes .NET).
+- `SideDim-0.2.2-win-x64-needs-dotnet10.exe` is much smaller but needs the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0).
+- `SHA256SUMS.txt` lets you check your download: `Get-FileHash SideDim-0.2.2-win-x64.exe` should match the line for that file.
+
+Settings carry over: just replace the exe.
+
 ## [0.2.1] - 2026-10-04
 
 ### Security

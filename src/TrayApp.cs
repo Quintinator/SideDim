@@ -90,6 +90,7 @@ internal sealed class TrayApp : ApplicationContext, ISettingsHost
         _menu = new TrayMenu(this);
         _tray = new NotifyIcon { Icon = _trayIcon, Visible = true, ContextMenuStrip = _menu.Strip };
         _tray.MouseClick += (_, e) => { if (e.Button == MouseButtons.Left) ShowSettings(); };
+        _tray.BalloonTipClicked += (_, _) => ShowSettings();
 
         _hotkey.Pressed += () => ToggleDimNowCore(includeOwnWindows: true);
         RegisterHotkey();
@@ -112,11 +113,20 @@ internal sealed class TrayApp : ApplicationContext, ISettingsHost
         _ui.Post(_ => { if (!OfferOwnFolder()) ShowStartupNotice(); }, null);
     }
 
+    /// <remarks>The AltGr notification comes once per hotkey and blocked character; the settings window keeps showing it.</remarks>
     private void ShowStartupNotice()
     {
         if (_settings.IsFirstRun) ShowSettings();
         else if (!HotkeyWorks)
             _tray.ShowBalloonTip(5000, "SideDim", $"The hotkey {_settings.ToggleHotkey} is taken by another app. Pick another one in the settings.", ToolTipIcon.Warning);
+        else if (Hotkey.TryParse(_settings.ToggleHotkey, out var hotkey)
+            && AltGr.Describe(KeyboardLayouts.AltGrTyped(hotkey)) is { } blocked
+            && _settings.AltGrWarnedFor != $"{hotkey}: {blocked}")
+        {
+            _tray.ShowBalloonTip(5000, "SideDim", $"Windows treats Ctrl+Alt as AltGr, so the hotkey {hotkey} stops you typing {blocked}. Pick another one in the settings.", ToolTipIcon.Warning);
+            _settings.AltGrWarnedFor = $"{hotkey}: {blocked}";
+            if (!_settings.LoadFailed) _settings.Save();
+        }
     }
 
     /// <returns>True when SideDim moved and this copy is exiting.</returns>

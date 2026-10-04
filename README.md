@@ -44,7 +44,7 @@ Only one screen? SideDim works there too: it darkens everything around the focus
 - **Identify screens.** Shows a big number and the monitor's name on each screen, so two identical monitors are easy to tell apart.
 - **Simple and Advanced tabs.** The everyday choices on one tab; per-screen settings, timing and the hotkey on the other.
 - **Test button.** Uses the settings window as the focused app, so you can tune everything live without starting a game or opening a document.
-- **Dim now hotkey.** `Ctrl+Alt+F9` by default, for a quick focus session, a windowed game or a video. Any combination with Ctrl or Alt works; bare keys and Alt+F4 are refused so SideDim never steals keys from games or other apps.
+- **Dim now hotkey.** `Ctrl+Alt+F9` by default, for a quick focus session, a windowed game or a video. Any combination with Ctrl or Alt works; bare keys and Alt+F4 are refused so SideDim never steals keys from games or other apps. Windows treats Ctrl+Alt as AltGr, so if your pick would block a character like é or € on one of your keyboard layouts, SideDim warns you.
 - **Your brightness comes back.** SideDim saves each monitor's brightness to disk before it changes anything. After a crash or power cut, the next start restores it. An unplugged monitor is restored when it comes back.
 - **Never steals focus.** Overlays can't be clicked or focused, so exclusive fullscreen games don't minimize and your typing never lands in the wrong window.
 - **Start with Windows.** A toggle in the settings window and in the tray menu.
@@ -61,7 +61,15 @@ Keep the exe in a folder of its own, not loose in Downloads, the Desktop or Docu
 
 Each release also has `SHA256SUMS.txt`: `Get-FileHash` on your download should match the line for that file.
 
-Windows 10 or 11. The exe isn't code signed yet, so SmartScreen may warn the first time: click **More info**, then **Run anyway**.
+Windows 10 or 11.
+
+### "Windows protected your PC"
+
+SideDim isn't code signed, so Windows doesn't know who made it, and SmartScreen warns when you first run a downloaded copy. Click **More info**, then **Run anyway**. Each new release starts without a track record, so the warning can come back after an update.
+
+**Smart App Control** (Windows 11, in Windows Security under App & browser control) is stricter: it blocks unsigned apps that Microsoft's cloud service doesn't recognize as safe, and it has no Run anyway button. A new SideDim release will most likely be blocked while it is on.
+
+Why not sign it? A certificate costs money every year and would get SideDim past Smart App Control, but SmartScreen keeps warning about a newly signed app too until enough people have installed it. To check that your download is the real one, use `SHA256SUMS.txt` as described above.
 
 ## Controls
 
@@ -90,7 +98,8 @@ Everything in the settings window applies immediately. Settings are stored in `%
 | `DimDelayMs` | `800` | How long a window must have focus before dimming, so quick alt-tabs don't flicker |
 | `RestoreDelayMs` | `200` | How long before restoring after focus leaves |
 | `FadeMs` | `300` | Overlay fade time, 0 to 2000 |
-| `ToggleHotkey` | `Ctrl+Alt+F9` | The Dim now hotkey. A function key is the default because Ctrl+Alt+letter is AltGr+letter on many keyboard layouts |
+| `ToggleHotkey` | `Ctrl+Alt+F9` | The Dim now hotkey. A function key is the default because Ctrl+Alt+letter is AltGr+letter on many keyboard layouts; SideDim warns when your choice would block a character |
+| `AltGrWarnedFor` | `null` | Remembers which AltGr clash the startup notification already named, so it shows once (file only) |
 | `WarnAboutFolder` | `true` | The large exe offers to move itself out of Downloads and other shared folders. **Don't ask again** sets this to `false` |
 | `Monitors` | `{}` | Per-screen overrides, keyed by the monitor's id: `Dim` (false = never dim), `BacklightLevel` and `OverlayStrength` (leave out to use the shared value). Easiest to set on the Advanced tab |
 
@@ -118,6 +127,7 @@ Turn off Start with Windows, exit SideDim from the tray, then delete the exe (or
 
 - **Backlight mode does nothing on a screen.** Turn on DDC/CI in that monitor's on-screen menu, then run `SideDim.exe --probe`. Some monitors, docks and most laptop panels don't support DDC/CI; use Overlay for those.
 - **The hotkey shows "In use by another app".** Another program registered that combination first. Pick a different one.
+- **A character like é or € stopped working.** Your hotkey is probably Ctrl+Alt plus that key, which Windows also uses for AltGr. Pick another hotkey, for example `Ctrl+Alt+F9`.
 - **A screen stayed dark.** Start SideDim again: it restores whatever is in `%LOCALAPPDATA%\SideDim\hardware-state.json`. You can also set the brightness in the monitor's own menu.
 - **Anti-cheat.** SideDim never touches game processes. It only asks Windows which window has focus and which exe owns it.
 - **Something else?** [Open an issue](https://github.com/Quintinator/SideDim/issues) and include the output of `SideDim.exe --probe` and your `sidedim.log`.

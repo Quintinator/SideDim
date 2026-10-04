@@ -98,6 +98,14 @@ internal static class Native
     [DllImport("user32.dll", SetLastError = true)] public static extern bool RegisterHotKey(IntPtr hWnd, int id, uint modifiers, uint vk);
     [DllImport("user32.dll")] public static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 
+    public const uint MAPVK_VK_TO_VSC = 0;
+    public const uint TOUNICODE_KEEP_STATE = 0x4;
+
+    [DllImport("user32.dll")] public static extern uint MapVirtualKeyEx(uint code, uint mapType, IntPtr keyboardLayout);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern int ToUnicodeEx(uint vk, uint scanCode, byte[] keyState, [Out] char[] buffer, int bufferSize, uint flags, IntPtr keyboardLayout);
+
     public const int GWL_STYLE = -16;
     public const int GWL_EXSTYLE = -20;
     public const int WS_CAPTION = 0x00C00000;

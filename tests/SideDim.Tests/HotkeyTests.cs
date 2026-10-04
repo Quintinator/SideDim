@@ -31,6 +31,10 @@ public class HotkeyTests
     public void Rejects_nonsense(string text) => Assert.False(Hotkey.TryParse(text, out _));
 
     [Fact]
+    public void A_key_without_a_name_is_ignored() =>
+        Assert.Null(Hotkey.FromKeyPress((Keys)0xC1, ctrl: true, alt: true, shift: false));
+
+    [Fact]
     public void Round_trips_through_text()
     {
         Assert.True(Hotkey.TryParse("shift+ctrl+alt+k", out var hk));

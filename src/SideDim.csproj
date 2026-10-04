@@ -11,7 +11,7 @@
     <PublishSingleFile>true</PublishSingleFile>
     <AssemblyName>SideDim</AssemblyName>
     <RootNamespace>SideDim</RootNamespace>
-    <Version>0.2.1</Version>
+    <Version>0.2.2</Version>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <Product>SideDim</Product>
     <RepositoryUrl>https://github.com/Quintinator/SideDim</RepositoryUrl>

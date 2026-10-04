@@ -61,6 +61,7 @@ internal sealed class SettingsForm : Form
     private readonly NumericUpDown _fade = Milliseconds(Settings.MaxFadeMs);
     private readonly TextBox _hotkey = new() { ReadOnly = true, BackColor = SystemColors.Window };
     private readonly Label _hotkeyStatus = new() { AutoSize = true, ForeColor = Color.Firebrick };
+    private readonly Label _hotkeyAltGr = new() { AutoSize = false, UseMnemonic = false, ForeColor = Color.Firebrick };
 
     private readonly CheckBox _test = new() { Text = "Test: dim around this window", Appearance = Appearance.Button, AutoSize = true };
 
@@ -111,6 +112,7 @@ internal sealed class SettingsForm : Form
             slider.Size = new Size(LogicalToDeviceUnits(240), LogicalToDeviceUnits(32));
         foreach (var box in new[] { _delay, _restoreDelay, _fade }) box.Width = LogicalToDeviceUnits(70);
         _hotkey.Width = LogicalToDeviceUnits(160);
+        _hotkeyAltGr.Size = new Size(w, Math.Max(LogicalToDeviceUnits(64), TextRenderer.MeasureText("Xg", Font).Height * 4));
         _screen.Width = LogicalToDeviceUnits(270);
 
         var simple = Page();
@@ -144,6 +146,7 @@ internal sealed class SettingsForm : Form
         advanced.Controls.Add(Row(Caption("Fade in and out (ms)"), _fade));
         advanced.Controls.Add(Header("Hotkey"));
         advanced.Controls.Add(Row(Caption("Dim now hotkey"), _hotkey, _hotkeyStatus));
+        advanced.Controls.Add(_hotkeyAltGr);
 
         var tabs = new TabControl();
         tabs.TabPages.Add(PageTab("Simple", simple));
@@ -421,8 +424,16 @@ internal sealed class SettingsForm : Form
         _screenOverlayValue.Text = $"{_screenOverlay.Value}%";
     }
 
-    private void UpdateHotkeyStatus() =>
-        _hotkeyStatus.Text = _host.HotkeyWorks ? "" : "In use by another app, pick another";
+    /// <remarks>
+    /// The hotkey is unregistered while its box has focus, so "in use" would be stale until focus leaves.
+    /// The AltGr note has a fixed size at the bottom of its tab, because the tabs are sized once when the window is built.
+    /// </remarks>
+    private void UpdateHotkeyStatus()
+    {
+        _hotkeyStatus.Text = _host.HotkeyWorks || _hotkey.Focused ? "" : "In use by another app, pick another";
+        var blocked = Hotkey.TryParse(_s.ToggleHotkey, out var hotkey) ? AltGr.Describe(KeyboardLayouts.AltGrTyped(hotkey)) : null;
+        _hotkeyAltGr.Text = blocked is null ? "" : $"Windows treats Ctrl+Alt as AltGr, so this hotkey stops you typing {blocked}. Pick another key.";
+    }
 
     private bool IsSingleMonitor => !DimPolicy.BacklightAvailable(_host.MonitorCount);
 
@@ -569,6 +580,7 @@ internal sealed class SettingsForm : Form
         _hotkey.Text = hotkey.ToString();
         _s.ToggleHotkey = hotkey.ToString();
         _s.Save();
+        UpdateHotkeyStatus();
     }
 
     protected override void OnFormClosed(FormClosedEventArgs e)

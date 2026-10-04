@@ -12,7 +12,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$changelog = Get-Content (Join-Path $PSScriptRoot '..\CHANGELOG.md') -Raw
+$changelog = Get-Content (Join-Path $PSScriptRoot '..\CHANGELOG.md') -Raw -Encoding utf8
 $pattern = '(?ms)^## \[' + [regex]::Escape($Version) + '\][^\r\n]*\r?\n(.*?)(?=^## \[|\z)'
 $match = [regex]::Match($changelog, $pattern)
 if (-not $match.Success -or -not $match.Groups[1].Value.Trim()) {

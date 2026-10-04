@@ -56,7 +56,7 @@ internal readonly record struct Hotkey(HotkeyModifiers Modifiers, Keys Key)
 
     public static Hotkey? FromKeyPress(Keys key, bool ctrl, bool alt, bool shift)
     {
-        if (ModifierKeys.Contains(key) || key == Keys.None) return null;
+        if (ModifierKeys.Contains(key) || key == Keys.None || !Enum.IsDefined(key)) return null;
 
         var mods = HotkeyModifiers.None;
         if (ctrl) mods |= HotkeyModifiers.Ctrl;

@@ -70,6 +70,9 @@ internal sealed class Settings
     /// <summary>Offer to move the self-contained exe out of a shared folder such as Downloads.</summary>
     public bool WarnAboutFolder { get; set; } = true;
 
+    /// <summary>The hotkey and blocked characters the last AltGr notification named, so each clash is announced once.</summary>
+    public string? AltGrWarnedFor { get; set; }
+
     /// <summary>Keyed by the stable <see cref="Monitor.Id"/>.</summary>
     public Dictionary<string, MonitorSettings> Monitors { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
