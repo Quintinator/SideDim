@@ -3,10 +3,7 @@ using System.Text;
 
 namespace SideDim;
 
-/// <param name="ProcessId">The process that owns the window (the hosted app for Store apps).</param>
-/// <param name="Process">Process name without ".exe", or "" when unknown.</param>
-/// <param name="Path">Full exe path, or null if Windows won't tell us.</param>
-/// <param name="Bounds">Visible window rectangle in physical pixels.</param>
+/// <summary>ProcessId is the hosted app for Store apps, Process is "" when unknown, Path is null when unknown, Bounds is in physical pixels.</summary>
 internal sealed record Foreground(uint ProcessId, string Process, string? Path, Monitor Monitor, Rectangle Bounds, bool IsFullscreen);
 
 internal static class ForegroundWatcher
@@ -19,11 +16,10 @@ internal static class ForegroundWatcher
 
     private static readonly int OwnPid = Environment.ProcessId;
 
-    // The foreground window rarely changes, so remember its process instead of opening it every poll.
     private static IntPtr _cachedWindow;
     private static (uint Pid, string Name, string? Path) _cachedProcess = (0, "", null);
 
-    /// <summary>Returns the window the user is looking at, or null for desktop/shell (and our own windows, unless asked).</summary>
+    /// <remarks>No-activate overlays are always excluded, because Windows can briefly report them as the foreground window.</remarks>
     public static Foreground? Current(bool includeOwnWindows = false)
     {
         var hwnd = Native.GetForegroundWindow();
@@ -37,7 +33,6 @@ internal static class ForegroundWatcher
         if (pid == OwnPid)
         {
             if (!includeOwnWindows) return null;
-            // Our overlays are never "the window you're using", even if Windows briefly says so.
             if ((Native.GetWindowLong(hwnd, Native.GWL_EXSTYLE) & Native.WS_EX_NOACTIVATE) != 0) return null;
         }
 
@@ -52,45 +47,38 @@ internal static class ForegroundWatcher
         return new Foreground(ownerPid, name, path, monitor, bounds, fullscreen);
     }
 
+    /// <remarks>Cached by window handle, not pid, because pids get reused; failed lookups stay uncached so the next poll retries them.</remarks>
     private static (uint Pid, string Name, string? Path) ProcessInfo(IntPtr hwnd, uint pid)
     {
-        // Keyed on the window, not the pid: pids get reused, window handles of live windows don't.
         if (hwnd == _cachedWindow) return _cachedProcess;
 
         var owner = Resolve(hwnd, pid);
 
-        // Only remember successes, so a lookup that failed (process starting up, access denied) is retried.
         if (owner.Name.Length == 0) return owner;
         _cachedWindow = hwnd;
         _cachedProcess = owner;
         return owner;
     }
 
-    /// <summary>The process a user would say owns this window ("" name when Windows won't say).</summary>
+    /// <remarks>ApplicationFrameHost wraps Store and Game Pass apps; the real app owns a child window that can be missing while it resumes, which gives an empty name.</remarks>
     private static (uint Pid, string Name, string? Path) Resolve(IntPtr hwnd, uint pid)
     {
         var (name, path) = Describe(pid);
         if (string.Equals(name, StoreAppFrame, StringComparison.OrdinalIgnoreCase))
         {
-            // Store and Game Pass apps live inside an ApplicationFrameHost window; the real app owns a child.
-            // The child can be missing for a moment while the app resumes, so a miss is retried next poll.
             pid = HostedAppPid(hwnd, pid);
             (name, path) = pid == 0 ? ("", null) : Describe(pid);
         }
         return (pid, name, path);
     }
 
-    /// <summary>
-    /// Visible, titled top-level windows with their owning app, resolved the same way as the foreground
-    /// window, so Store apps show up under their real name instead of ApplicationFrameHost.
-    /// </summary>
+    /// <remarks>Cloaked windows are skipped because suspended Store apps keep an invisible frame around.</remarks>
     public static List<WindowedApp> VisibleApps()
     {
         var apps = new List<WindowedApp>();
         Native.EnumWindows((hwnd, _) =>
         {
             if (!Native.IsWindowVisible(hwnd) || Native.GetWindow(hwnd, Native.GW_OWNER) != IntPtr.Zero) return true;
-            // Suspended Store apps keep an invisible ("cloaked") frame around.
             if (Native.DwmGetWindowAttributeInt(hwnd, Native.DWMWA_CLOAKED, out var cloaked, sizeof(int)) == 0 && cloaked != 0) return true;
 
             var length = Native.GetWindowTextLength(hwnd);
@@ -135,7 +123,6 @@ internal static class ForegroundWatcher
             }
             catch (Exception e) when (e is ArgumentException or InvalidOperationException)
             {
-                // The process exited between the two calls.
             }
         }
         return (name, path);

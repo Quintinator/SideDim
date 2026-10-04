@@ -4,18 +4,15 @@ namespace SideDim.Tests;
 
 internal static class TestSetup
 {
-    /// <summary>Keep test runs out of the real log in %APPDATA%.</summary>
     [ModuleInitializer]
     internal static void SilenceLog() => Log.Sink = _ => { };
 }
 
-/// <summary>Shared event log so tests can check the order of writes across the fake monitor and store.</summary>
 internal sealed class Timeline
 {
     public List<string> Events { get; } = [];
 }
 
-/// <summary>Monitors that answer (or ignore) DDC/CI, with brightness kept in memory.</summary>
 internal sealed class FakeMonitors(Timeline timeline) : IBrightnessDevice
 {
     public Dictionary<string, uint> Brightness { get; } = [];
@@ -49,7 +46,6 @@ internal sealed class FakeStore(Timeline timeline) : IBrightnessStore
 {
     public Dictionary<string, uint> Saved { get; private set; } = [];
 
-    /// <summary>Simulates a full disk or a locked file.</summary>
     public bool FailSaves { get; set; }
 
     public Dictionary<string, uint> Load() => new(Saved);
@@ -74,6 +70,6 @@ internal sealed class TempFolder : IDisposable
     public void Dispose()
     {
         try { Directory.Delete(Path, recursive: true); }
-        catch (IOException) { /* a scanner holding a file open shouldn't fail the test */ }
+        catch (IOException) { }
     }
 }

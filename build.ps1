@@ -3,6 +3,9 @@
     The whole pipeline: restore, format check, build, test, publish.
     CI runs exactly this script, so a green local run means a green CI run.
 
+.PARAMETER Version
+    Version stamped into the exe, e.g. 0.2.0.
+
 .EXAMPLE
     ./build.ps1                 # everything
     ./build.ps1 -SkipPublish    # quick check before committing
@@ -10,7 +13,6 @@
 param(
     [switch]$SkipPublish,
     [string]$Configuration = 'Release',
-    # Stamped into the exe, e.g. 0.2.0. The release workflow passes the git tag.
     [string]$Version
 )
 
@@ -32,7 +34,6 @@ Step 'Restore' { dotnet restore }
 Step 'Format check' { dotnet format --verify-no-changes --no-restore }
 Step 'Build' { dotnet build --configuration $Configuration --no-restore -warnaserror }
 Step 'Test' {
-    # A stuck worker-thread test fails after 2 minutes instead of hanging CI for hours.
     dotnet test --configuration $Configuration --no-build --blame-hang-timeout 2m --blame-hang-dump-type none `
         --logger 'console;verbosity=minimal' `
         --logger 'trx;LogFileName=test-results.trx' `

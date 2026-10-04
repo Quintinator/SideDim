@@ -66,7 +66,7 @@ public class HotkeyTests
     public void Default_hotkey_avoids_AltGr_letters_and_parses()
     {
         Assert.True(Hotkey.TryParse(Settings.DefaultHotkey, out var hk));
-        Assert.InRange(hk.Key, Keys.F1, Keys.F24); // Ctrl+Alt+letter would be AltGr+letter on European layouts
+        Assert.InRange(hk.Key, Keys.F1, Keys.F24);
     }
 
     [Theory]

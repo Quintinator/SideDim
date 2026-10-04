@@ -1,6 +1,5 @@
 namespace SideDim;
 
-/// <summary>The rules for when and where to dim. Pure functions, so they're easy to test.</summary>
 internal static class DimPolicy
 {
     public static bool ShouldDim(Settings s, string process, bool isFullscreen)
@@ -12,10 +11,7 @@ internal static class DimPolicy
         return s.AlsoAnyFullscreen && isFullscreen;
     }
 
-    /// <summary>
-    /// A window that covers its whole monitor. A maximized window with a title bar also covers a monitor
-    /// that has no taskbar, but that's a normal window, not a fullscreen app.
-    /// </summary>
+    /// <remarks>A maximized window with a title bar also covers a monitor that has no taskbar, but it is a normal window, not fullscreen.</remarks>
     public static bool IsFullscreen(Rectangle window, Rectangle monitor, bool isMaximized, bool hasCaption)
     {
         var covers = window.Left <= monitor.Left && window.Top <= monitor.Top
@@ -23,10 +19,6 @@ internal static class DimPolicy
         return covers && !(isMaximized && hasCaption);
     }
 
-    /// <summary>
-    /// The screens to dim while <paramref name="keepBright"/> has the focused app: every other screen,
-    /// except the ones set to never dim, each with its own darkness.
-    /// </summary>
     public static List<DimTarget> Targets(Settings s, IEnumerable<Monitor> monitors, string? keepBright)
     {
         if (keepBright is null) return [];
@@ -40,16 +32,11 @@ internal static class DimPolicy
         return targets;
     }
 
-    /// <summary>With one monitor there's nothing beside it to dim, so the spotlight is the whole point.</summary>
+    /// <summary>Spotlight is forced on with a single monitor, since there is nothing beside it to dim.</summary>
     public static bool SpotlightOn(Settings s, int monitorCount) => s.Spotlight || monitorCount == 1;
 
-    /// <summary>Backlight dimming only ever touches the other monitors, so it needs at least two.</summary>
     public static bool BacklightAvailable(int monitorCount) => monitorCount > 1;
 
-    /// <summary>
-    /// The area to leave lit on the focused screen when spotlight is on, or null for no spotlight.
-    /// A fullscreen window needs no spotlight: there's nothing around it to darken.
-    /// </summary>
     public static Rectangle? SpotlightHole(bool spotlightOn, string? keptBright, string? windowMonitor, Rectangle window, bool isFullscreen)
     {
         if (!spotlightOn || keptBright is null || windowMonitor != keptBright) return null;
@@ -57,7 +44,6 @@ internal static class DimPolicy
         return window;
     }
 
-    /// <summary>Screen coordinates to coordinates inside an overlay that covers <paramref name="monitor"/>.</summary>
     public static Rectangle ToOverlayCoordinates(Rectangle hole, Rectangle monitor) =>
         hole with { X = hole.X - monitor.X, Y = hole.Y - monitor.Y };
 }

@@ -4,7 +4,6 @@ public class FocusDebouncerTests
 {
     private static readonly TimeSpan DimDelay = TimeSpan.FromMilliseconds(800);
     private static readonly TimeSpan RestoreDelay = TimeSpan.FromMilliseconds(200);
-    /// <summary>Monotonic timestamps, like Stopwatch.Elapsed.</summary>
     private static TimeSpan At(int ms) => TimeSpan.FromMilliseconds(1_000_000 + ms);
 
     [Fact]
@@ -24,7 +23,7 @@ public class FocusDebouncerTests
         d.Update("D1", At(0), DimDelay, RestoreDelay);
         d.Update(null, At(300), DimDelay, RestoreDelay);
         d.Update("D1", At(600), DimDelay, RestoreDelay);
-        Assert.False(d.Update("D1", At(1000), DimDelay, RestoreDelay)); // only 400 ms since it came back
+        Assert.False(d.Update("D1", At(1000), DimDelay, RestoreDelay));
         Assert.Null(d.Applied);
     }
 
@@ -69,7 +68,7 @@ public class FocusDebouncerTests
     {
         var d = new FocusDebouncer();
         d.Update("D1", At(1000), DimDelay, RestoreDelay);
-        d.Update("D1", At(0), DimDelay, RestoreDelay); // e.g. a caller passing a reset clock
+        d.Update("D1", At(0), DimDelay, RestoreDelay);
         Assert.True(d.Update("D1", At(800), DimDelay, RestoreDelay));
     }
 }

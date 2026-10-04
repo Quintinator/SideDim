@@ -95,7 +95,7 @@ public sealed class SettingsTests : IDisposable
         File.WriteAllText(FilePath, """{ "BacklightLevel": 101, "OverlayStrength": 100, "DimDelayMs": 99999, "FadeMs": 99999 }""");
         var s = Settings.Load(FilePath);
         Assert.Equal(100, s.BacklightLevel);
-        Assert.Equal(95, s.OverlayStrength);  // never fully black: a stuck overlay must not hide a screen
+        Assert.Equal(95, s.OverlayStrength);
         Assert.Equal(10_000, s.DimDelayMs);
         Assert.Equal(2_000, s.FadeMs);
     }
@@ -108,7 +108,7 @@ public sealed class SettingsTests : IDisposable
 
         Assert.Empty(s.Apps);
         Assert.Empty(s.NeverDimFor);
-        Assert.True(s.IsNeverDim("explorer")); // built-ins still apply
+        Assert.True(s.IsNeverDim("explorer"));
         Assert.Equal(Settings.DefaultHotkey, s.ToggleHotkey);
     }
 
@@ -164,7 +164,7 @@ public sealed class SettingsTests : IDisposable
             Assert.False(s.IsFirstRun);
         }
         Assert.Empty(Directory.GetFiles(_dir.Path, "settings.json.broken*"));
-        Assert.Equal(90, Settings.Load(FilePath).OverlayStrength); // nothing was overwritten
+        Assert.Equal(90, Settings.Load(FilePath).OverlayStrength);
     }
 
     [Fact]
@@ -176,10 +176,10 @@ public sealed class SettingsTests : IDisposable
         {
             s = Settings.Load(FilePath);
             s.Enabled = false;
-            Assert.False(s.Save(FilePath)); // still locked: refuse rather than clobber
+            Assert.False(s.Save(FilePath));
         }
 
-        Assert.True(s.Save(FilePath));    // unlocked: the unread file is set aside first
+        Assert.True(s.Save(FilePath));
         var aside = Directory.GetFiles(_dir.Path, "settings.json.unread-*").Single();
         Assert.Contains("cs2", File.ReadAllText(aside));
     }

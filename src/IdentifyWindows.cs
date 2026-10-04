@@ -1,6 +1,5 @@
 namespace SideDim;
 
-/// <summary>Shows a big number and name on every screen for a few seconds, like Windows' own "Identify".</summary>
 internal static class IdentifyWindows
 {
     private static readonly TimeSpan ShowFor = TimeSpan.FromSeconds(3);
@@ -54,7 +53,6 @@ internal static class IdentifyWindows
 
             _close.Tick += (_, _) => Close();
             _close.Start();
-            // The labels cover the whole badge, so they need the click handler too.
             Click += (_, _) => Close();
             foreach (Control label in Controls) label.Click += (_, _) => Close();
         }
@@ -71,16 +69,17 @@ internal static class IdentifyWindows
             }
         }
 
+        /// <remarks>Reapplies the bounds with SetWindowPos so they stay in physical pixels on the right monitor without activating.</remarks>
         protected override void OnShown(EventArgs e)
         {
             base.OnShown(e);
-            // Physical pixels on the right monitor, without activating (same as the overlays).
             Native.SetWindowPos(Handle, Native.HWND_TOPMOST, _bounds.X, _bounds.Y, _bounds.Width, _bounds.Height, Native.SWP_NOACTIVATE);
         }
 
+        /// <remarks>Swallows WM_DPICHANGED so the badge keeps the physical size it was given.</remarks>
         protected override void WndProc(ref Message m)
         {
-            if (m.Msg == Native.WM_DPICHANGED) return; // keep the physical size we asked for
+            if (m.Msg == Native.WM_DPICHANGED) return;
             base.WndProc(ref m);
         }
 

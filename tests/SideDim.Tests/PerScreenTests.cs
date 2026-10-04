@@ -61,13 +61,13 @@ public sealed class PerScreenTests : IDisposable
         var s = new Settings();
         s.MonitorFor(@"\\?\DISPLAY#MSI3EA5#1", "MSI MAG401QR").OverlayStrength = 50;
         s.MonitorFor(@"\\?\DISPLAY#DELD0E3#2", "DELL S2419HGF").Dim = false;
-        s.MonitorFor(@"\\?\DISPLAY#MSI3EA5#3", "MSI MAG401QR"); // touched but left at defaults
+        s.MonitorFor(@"\\?\DISPLAY#MSI3EA5#3", "MSI MAG401QR");
         s.Normalize().Save(path);
 
         var loaded = Settings.Load(path);
 
         Assert.Equal(2, loaded.Monitors.Count);
-        Assert.Equal(50, loaded.LevelsFor(@"\\?\display#msi3ea5#1").OverlayStrength); // ids match case-insensitively
+        Assert.Equal(50, loaded.LevelsFor(@"\\?\display#msi3ea5#1").OverlayStrength);
         Assert.False(loaded.LevelsFor(@"\\?\DISPLAY#DELD0E3#2").Dim);
         Assert.Equal("MSI MAG401QR", loaded.Monitors[@"\\?\DISPLAY#MSI3EA5#1"].Name);
     }

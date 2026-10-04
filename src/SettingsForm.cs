@@ -3,12 +3,6 @@ using System.Diagnostics;
 
 namespace SideDim;
 
-/// <summary>
-/// Simple tab for the everyday choices, Advanced tab for per-screen settings, timing and the hotkey.
-/// Every control writes straight into Settings; there is no OK/Cancel. Sliders and number boxes commit
-/// 250 ms after they stop changing. The hotkey box pauses the global hotkey while it has focus and
-/// registers the new one when it loses focus.
-/// </summary>
 internal sealed class SettingsForm : Form
 {
     private static readonly TimeSpan SliderSettle = TimeSpan.FromMilliseconds(250);
@@ -17,13 +11,13 @@ internal sealed class SettingsForm : Form
     private readonly ISettingsHost _host;
     private readonly IContainer _components = new Container();
     private readonly System.Windows.Forms.Timer _sliderCommit;
-    private readonly Font? _uiFont = SystemFonts.MessageBoxFont; // a new Font each call, so ours to dispose
+    /// <summary><see cref="SystemFonts.MessageBoxFont"/> returns a new Font on every call, so this form owns and disposes it.</summary>
+    private readonly Font? _uiFont = SystemFonts.MessageBoxFont;
     private readonly Font _headerFont;
     private readonly Icon _windowIcon;
     private readonly List<Image> _appImages = [];
     private List<ScreenInfo> _screens = [];
 
-    // Simple tab
     private readonly CheckBox _enabled = new() { Text = "SideDim is on", AutoSize = true };
     private readonly RadioButton _triggerApps = new() { Text = "When one of these apps is focused", AutoSize = true };
     private readonly RadioButton _triggerAny = new() { Text = "Always, for whatever window is focused", AutoSize = true };
@@ -53,7 +47,6 @@ internal sealed class SettingsForm : Form
         + "Backlight dimming needs a second monitor.");
     private readonly CheckBox _autostart = new() { Text = "Start with Windows", AutoSize = true };
 
-    // Advanced tab
     private readonly ComboBox _screen = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly Button _identify = new() { Text = "Identify screens", AutoSize = true };
     private readonly CheckBox _screenDim = new() { Text = "Dim this screen", AutoSize = true };
@@ -69,11 +62,10 @@ internal sealed class SettingsForm : Form
     private readonly TextBox _hotkey = new() { ReadOnly = true, BackColor = SystemColors.Window };
     private readonly Label _hotkeyStatus = new() { AutoSize = true, ForeColor = Color.Firebrick };
 
-    // Below both tabs
     private readonly CheckBox _test = new() { Text = "Test: dim around this window", Appearance = Appearance.Button, AutoSize = true };
 
     private bool _loading;
-    private bool _dimNowStartedHere; // closing the window only stops a "Dim now" that its own Test button started
+    private bool _dimNowStartedHere;
 
     public SettingsForm(Settings settings, ISettingsHost host)
     {
@@ -105,6 +97,7 @@ internal sealed class SettingsForm : Form
 
     private static Label Note(string text) => new() { Text = text, AutoSize = true, ForeColor = SystemColors.GrayText };
 
+    /// <remarks>A TabControl does not size itself to its pages, and its chrome can only be measured once its handle exists.</remarks>
     private void BuildLayout()
     {
         var w = LogicalToDeviceUnits(460);
@@ -117,7 +110,7 @@ internal sealed class SettingsForm : Form
         foreach (var slider in new[] { _backlight, _overlay, _screenBacklight, _screenOverlay })
             slider.Size = new Size(LogicalToDeviceUnits(240), LogicalToDeviceUnits(32));
         foreach (var box in new[] { _delay, _restoreDelay, _fade }) box.Width = LogicalToDeviceUnits(70);
-        _hotkey.Width = LogicalToDeviceUnits(160); // fits names like Ctrl+Alt+Shift+OemQuestion
+        _hotkey.Width = LogicalToDeviceUnits(160);
         _screen.Width = LogicalToDeviceUnits(270);
 
         var simple = Page();
@@ -155,7 +148,6 @@ internal sealed class SettingsForm : Form
         var tabs = new TabControl();
         tabs.TabPages.Add(PageTab("Simple", simple));
         tabs.TabPages.Add(PageTab("Advanced", advanced));
-        // A TabControl doesn't size itself to its pages, so size it to the bigger page plus its own chrome.
         tabs.Size = new Size(1000, 1000);
         _ = tabs.Handle;
         var chrome = tabs.Size - tabs.DisplayRectangle.Size;
@@ -244,7 +236,6 @@ internal sealed class SettingsForm : Form
         return row;
     }
 
-    /// <summary>Copies settings into the controls without triggering change handlers.</summary>
     public void ReloadValues()
     {
         _loading = true;
@@ -290,10 +281,11 @@ internal sealed class SettingsForm : Form
         UpdateEnabledStates();
     }
 
+    /// <remarks>ImageList never disposes the images added to it, so <see cref="_appImages"/> owns them.</remarks>
     private int AddIcon(string entry)
     {
         var image = ExeIcon(entry) ?? SystemIcons.Application.ToBitmap();
-        _appImages.Add(image); // ImageList keeps a reference, so dispose these ourselves on reload/close
+        _appImages.Add(image);
         _icons.Images.Add(image);
         return _icons.Images.Count - 1;
     }
@@ -308,10 +300,11 @@ internal sealed class SettingsForm : Form
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
         {
-            return null; // missing or unreadable exe: the generic icon will do
+            return null;
         }
     }
 
+    /// <remarks>The hotkey box uses GotFocus and LostFocus, not Enter and Leave, so alt-tabbing away from it also turns the global hotkey back on.</remarks>
     private void Wire()
     {
         _enabled.CheckedChanged += (_, _) => Commit(() => _s.Enabled = _enabled.Checked);
@@ -331,12 +324,7 @@ internal sealed class SettingsForm : Form
                 MessageBoxButtons.OK, MessageBoxIcon.Warning);
         };
 
-        // Sliders and number boxes update their label live but only commit once they stop changing:
-        // every DDC/CI write is a slow bus transaction, and every commit saves the settings file.
         foreach (var slider in new[] { _backlight, _overlay }) slider.ValueChanged += (_, _) => OnSliderMoved();
-        // A per-screen slider writes its own level right away, for the screen picked at that moment, so
-        // switching screens mid-drag can't send it to the wrong one and an untouched level stays inherited.
-        // The timer then only saves and applies.
         _screenBacklight.ValueChanged += (_, _) => OnScreenSliderMoved(m => m.BacklightLevel = _screenBacklight.Value);
         _screenOverlay.ValueChanged += (_, _) => OnScreenSliderMoved(m => m.OverlayStrength = _screenOverlay.Value);
         foreach (var box in new[] { _delay, _restoreDelay, _fade }) box.ValueChanged += (_, _) => OnSliderMoved();
@@ -356,7 +344,6 @@ internal sealed class SettingsForm : Form
             Commit(() =>
             {
                 var m = _s.MonitorFor(screen.Monitor.Id, screen.Name);
-                // Starting from the current shared values feels natural; turning it off falls back to them.
                 m.BacklightLevel = _screenOwn.Checked ? _screenBacklight.Value : null;
                 m.OverlayStrength = _screenOwn.Checked ? _screenOverlay.Value : null;
             });
@@ -379,7 +366,6 @@ internal sealed class SettingsForm : Form
         _addExe.Click += (_, _) => BrowseForExe();
         _addRunning.Click += (_, _) => ShowRunningApps();
 
-        // Focus events (not Enter/Leave) so alt-tabbing away from the box also turns the hotkey back on.
         _hotkey.GotFocus += (_, _) => _host.SuspendHotkey(true);
         _hotkey.LostFocus += (_, _) =>
         {
@@ -405,6 +391,7 @@ internal sealed class SettingsForm : Form
         _sliderCommit.Start();
     }
 
+    /// <remarks>Writes at once to the screen selected now, so a mid-drag screen switch cannot hit the wrong screen and an untouched level stays inherited.</remarks>
     private void OnScreenSliderMoved(Action<MonitorSettings> write)
     {
         if (!_loading && _screenOwn.Checked && SelectedScreen is { } screen) write(_s.MonitorFor(screen.Monitor.Id, screen.Name));
@@ -422,7 +409,6 @@ internal sealed class SettingsForm : Form
             _s.RestoreDelayMs = (int)_restoreDelay.Value;
             _s.FadeMs = (int)_fade.Value;
         });
-        // Inherited levels show the new shared values; the screen's own levels reload unchanged.
         LoadSelectedScreen();
         RefreshScreenNames();
     }
@@ -446,8 +432,6 @@ internal sealed class SettingsForm : Form
         _apps.Enabled = _addExe.Enabled = _addRunning.Enabled = _alsoFullscreen.Enabled = apps;
         _remove.Enabled = apps && _apps.SelectedItems.Count > 0;
 
-        // With one monitor only the spotlight overlay can do anything. The saved mode is left alone,
-        // so a second monitor brings the user's choice back.
         var single = IsSingleMonitor;
         _singleMonitorNote.Visible = single;
         _modeHardware.Enabled = _modeBoth.Enabled = _spotlight.Enabled = !single;
@@ -466,7 +450,6 @@ internal sealed class SettingsForm : Form
 
     private ScreenInfo? SelectedScreen => (_screen.SelectedItem as ScreenChoice)?.Screen;
 
-    /// <summary>Re-reads the connected monitors, keeping the current selection when that monitor is still there.</summary>
     private void RefreshScreens()
     {
         var selectedId = SelectedScreen?.Monitor.Id;
@@ -479,7 +462,6 @@ internal sealed class SettingsForm : Form
         LoadSelectedScreen();
     }
 
-    /// <summary>Updates the "(not dimmed)" / "(own darkness)" hints in the screen list.</summary>
     private void RefreshScreenNames()
     {
         var selected = _screen.SelectedIndex;
@@ -544,7 +526,6 @@ internal sealed class SettingsForm : Form
 
     private void BrowseForExe()
     {
-        // No InitialDirectory: Windows then opens wherever the user last browsed, like in any other app.
         using var dlg = new OpenFileDialog { Filter = "Programs (*.exe)|*.exe", Title = "Pick an app or game to dim for" };
         if (dlg.ShowDialog(this) == DialogResult.OK) AddApp(dlg.FileName);
     }
@@ -563,7 +544,6 @@ internal sealed class SettingsForm : Form
                 Image = path is null ? null : ExeIcon(path),
             };
             var entry = path ?? app.Name;
-            // Same toggle behaviour as the tray's "Dim for" item: click again to remove.
             item.Click += (_, _) =>
             {
                 if (listed) RemoveApp(app.Name);
@@ -588,7 +568,7 @@ internal sealed class SettingsForm : Form
 
         _hotkey.Text = hotkey.ToString();
         _s.ToggleHotkey = hotkey.ToString();
-        _s.Save(); // registered when the box loses focus, so the combo isn't grabbed mid-typing
+        _s.Save();
     }
 
     protected override void OnFormClosed(FormClosedEventArgs e)
@@ -597,10 +577,11 @@ internal sealed class SettingsForm : Form
         _host.DisplaysChanged -= OnDisplaysChanged;
         if (_sliderCommit.Enabled) CommitSliders();
         if (_dimNowStartedHere && _host.IsDimNowOn) _host.ToggleTest();
-        _host.SuspendHotkey(false); // harmless if it wasn't suspended
+        _host.SuspendHotkey(false);
         base.OnFormClosed(e);
     }
 
+    /// <remarks>Images, fonts and the icon are disposed after <c>base.Dispose</c>, so no control paints with a disposed font or icon.</remarks>
     protected override void Dispose(bool disposing)
     {
         if (disposing)
@@ -611,7 +592,6 @@ internal sealed class SettingsForm : Form
         base.Dispose(disposing);
         if (disposing)
         {
-            // After the controls are gone, so nothing paints with a disposed font or icon.
             foreach (var image in _appImages) image.Dispose();
             _headerFont.Dispose();
             _uiFont?.Dispose();
@@ -619,7 +599,6 @@ internal sealed class SettingsForm : Form
         }
     }
 
-    /// <summary>A screen in the dropdown, with a hint when it doesn't simply follow the shared settings.</summary>
     private sealed class ScreenChoice(ScreenInfo screen, Settings settings)
     {
         public ScreenInfo Screen { get; } = screen;

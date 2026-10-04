@@ -1,9 +1,7 @@
 <#
 .SYNOPSIS
-    Draws the SideDim icon (three monitors, the outer two dimmed) and writes:
-      src/Assets/SideDim.ico   multi-size icon for the exe, tray and window
-      docs/logo.png            256 px PNG for places that can't show SVG
-    docs/logo.svg is the same drawing by hand; keep the two in sync if you change the design.
+    Draws the SideDim icon and writes src/Assets/SideDim.ico (multi-size) and docs/logo.png (256 px).
+    docs/logo.svg is a hand-drawn copy: keep it in sync when changing the design.
 #>
 param(
     [string]$Ico = (Join-Path $PSScriptRoot '..\src\Assets\SideDim.ico'),
@@ -22,7 +20,7 @@ using System.IO;
 
 public static class SideDimIcon
 {
-    // Design grid is 32x32. Small sizes snap to whole pixels so the tray icon stays crisp.
+    /// <summary>Maps a rectangle on the 32x32 design grid to pixels; sizes up to 32 snap to whole pixels so the tray icon stays crisp.</summary>
     static RectangleF R(float x, float y, float w, float h, int size)
     {
         float u = size / 32f;
@@ -72,7 +70,6 @@ public static class SideDimIcon
             var dimEdge = size >= 24 ? new Pen(Color.FromArgb(255, 0x6B, 0x72, 0x80), Math.Max(1f, u * 0.8f)) : null;
             var litStand = new SolidBrush(Color.FromArgb(255, 0xD9, 0x8E, 0x04));
 
-            // Soft glow behind the lit screen, only where there are enough pixels for it.
             if (size >= 48)
             {
                 using (var glowPath = new GraphicsPath())
@@ -100,7 +97,7 @@ public static class SideDimIcon
         return bmp;
     }
 
-    // Classic 32-bit DIB entry (what every Windows API reads), used for the small sizes.
+    /// <summary>Encodes a frame as a classic 32-bit DIB, the format every Windows API can read; used for all sizes below 256.</summary>
     static byte[] Dib(Bitmap bmp)
     {
         int s = bmp.Width;
@@ -118,7 +115,7 @@ public static class SideDimIcon
                 w.Write(row);
             }
             bmp.UnlockBits(data);
-            w.Write(new byte[maskStride * s]); // AND mask unused: alpha does the work
+            w.Write(new byte[maskStride * s]);
             return ms.ToArray();
         }
     }

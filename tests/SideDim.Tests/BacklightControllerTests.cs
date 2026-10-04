@@ -102,14 +102,14 @@ public class BacklightControllerTests
         c.Apply(["D1"], level: 10);
         c.Apply([], level: 10);
         c.Apply(["D1"], level: 10);
-        Assert.Equal(["D1", "D1"], reported); // every attempt is reported; the UI decides what to show
+        Assert.Equal(["D1", "D1"], reported);
 
-        _monitors.IgnoresDdc.Remove("D1"); // DDC/CI switched on in the monitor menu
+        _monitors.IgnoresDdc.Remove("D1");
         c.Apply(["D1"], level: 10);
         Assert.Equal(10u, _monitors.Brightness["D1"]);
 
         c.Apply([], level: 10);
-        _monitors.IgnoresDdc.Add("D1");    // off again, or lost after sleep
+        _monitors.IgnoresDdc.Add("D1");
         c.Apply(["D1"], level: 10);
         Assert.Equal(["D1", "D1", "D1"], reported);
     }
@@ -127,7 +127,6 @@ public class BacklightControllerTests
     [Fact]
     public void Leftovers_from_a_crash_are_restored_on_startup()
     {
-        // A previous run dimmed D1 and D2 and then died.
         _store.Save(new Dictionary<string, uint> { ["D1"] = 80, ["D2"] = 60 });
         _monitors.Brightness["D1"] = 10;
         _monitors.Brightness["D2"] = 10;
@@ -142,7 +141,6 @@ public class BacklightControllerTests
     [Fact]
     public void Leftover_original_wins_over_the_current_dimmed_value()
     {
-        // After a crash the monitor reads 10, but 80 is what the user had.
         _store.Save(new Dictionary<string, uint> { ["D1"] = 80 });
         _monitors.Brightness["D1"] = 10;
 
@@ -170,14 +168,14 @@ public class BacklightControllerTests
         var c = Create();
         c.Apply(["D2"], level: 10);
         _monitors.Connected.Remove("D2");
-        c.Apply([], level: 10);              // restore skipped: monitor gone
+        c.Apply([], level: 10);
 
         _monitors.Connected.Add("D2");
-        _monitors.Brightness["D2"] = 50;    // user changed it in the monitor menu meanwhile
+        _monitors.Brightness["D2"] = 50;
         c.Apply(["D2"], level: 10);
         Assert.Equal(10u, _monitors.Brightness["D2"]);
         c.Apply([], level: 10);
-        Assert.Equal(60u, _monitors.Brightness["D2"]); // still the original from before the first dim
+        Assert.Equal(60u, _monitors.Brightness["D2"]);
     }
 
     [Fact]
@@ -188,7 +186,7 @@ public class BacklightControllerTests
 
         _monitors.Connected.Remove("D2");
         c.Apply([], level: 10);
-        Assert.Equal(60u, _store.Saved["D2"]); // still remembered
+        Assert.Equal(60u, _store.Saved["D2"]);
 
         _monitors.Connected.Add("D2");
         c.RestoreAll();

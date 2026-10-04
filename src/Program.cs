@@ -5,18 +5,16 @@ internal static class Program
     private const string SingleInstanceMutex = @"Local\SideDim-single-instance";
     private const string ShowSettingsEvent = @"Local\SideDim-show-settings";
 
+    /// <remarks>A second launch needs AllowSetForegroundWindow or the running copy's settings window opens behind the active window. Crash handlers must be registered before TrayApp is constructed.</remarks>
     [STAThread]
     private static int Main(string[] args)
     {
         if (args.Contains("--probe", StringComparer.OrdinalIgnoreCase)) return Probe();
 
-        // Starting the exe again while it runs opens the settings window of the running copy.
         using var showSettings = new EventWaitHandle(false, EventResetMode.AutoReset, ShowSettingsEvent);
         using var mutex = new Mutex(initiallyOwned: true, SingleInstanceMutex, out var first);
         if (!first)
         {
-            // We were just started by the user, so we may hand our right to take the foreground to the
-            // running copy; without this its settings window would open behind the active window.
             Native.AllowSetForegroundWindow(Native.ASFW_ANY);
             showSettings.Set();
             return 0;
@@ -27,7 +25,6 @@ internal static class Program
         var ui = new WindowsFormsSynchronizationContext();
         SynchronizationContext.SetSynchronizationContext(ui);
 
-        // Handlers go up before the app exists, so even a failing constructor gets logged.
         TrayApp? app = null;
         AppDomain.CurrentDomain.UnhandledException += (_, e) =>
         {
@@ -62,10 +59,7 @@ internal static class Program
         return 0;
     }
 
-    /// <summary>
-    /// A UI error inside the 100 ms poll repeats ten times a second; log the first one in full and then
-    /// only a count, so the log doesn't rotate the original stack trace away.
-    /// </summary>
+    /// <summary>A UI error in the 100 ms poll repeats ten times a second; logging only a count keeps rotation from losing the first stack trace.</summary>
     private sealed class RepeatFilter
     {
         private string? _last;
@@ -86,10 +80,6 @@ internal static class Program
         }
     }
 
-    /// <summary>
-    /// Lists which monitors answer DDC/CI and their brightness. Printed to the console when started
-    /// from one, and always written to the log, so it can be pasted into a bug report.
-    /// </summary>
     private static int Probe()
     {
         Native.AttachConsole(Native.ATTACH_PARENT_PROCESS);

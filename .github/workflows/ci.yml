@@ -22,7 +22,6 @@ jobs:
         with:
           global-json-file: global.json
 
-      # Same script you run locally: ./build.ps1
       - name: Restore, format check, build, test, publish
         shell: pwsh
         run: ./build.ps1

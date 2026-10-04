@@ -103,7 +103,7 @@ internal static class Native
 
     [DllImport("user32.dll")] public static extern bool IsZoomed(IntPtr hWnd);
 
-    // GetWindowLongPtrW isn't exported by 32-bit user32. Styles are 32-bit values, so GetWindowLongW is right everywhere.
+    /// <remarks>Binds GetWindowLongW on purpose: 32-bit user32 does not export GetWindowLongPtrW, and styles fit in 32 bits.</remarks>
     [DllImport("user32.dll", EntryPoint = "GetWindowLongW")]
     public static extern int GetWindowLong(IntPtr hWnd, int index);
 
@@ -132,7 +132,7 @@ internal static class Native
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
     public static extern bool QueryFullProcessImageName(IntPtr process, uint flags, StringBuilder name, ref uint size);
 
-    /// <summary>Full exe path of a process. Works for most elevated and anti-cheat protected games too.</summary>
+    /// <remarks>Limited query access on purpose, so it also works for most elevated and anti-cheat protected games.</remarks>
     public static string? ProcessPath(uint pid)
     {
         var h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
@@ -149,7 +149,7 @@ internal static class Native
         }
     }
 
-    /// <summary>The visible window rectangle, without the invisible resize borders GetWindowRect includes.</summary>
+    /// <remarks>Prefers DWM frame bounds because GetWindowRect includes the invisible resize borders.</remarks>
     public static Rectangle VisibleBounds(IntPtr hWnd)
     {
         if (DwmGetWindowAttribute(hWnd, DWMWA_EXTENDED_FRAME_BOUNDS, out var r, Marshal.SizeOf<RECT>()) == 0)

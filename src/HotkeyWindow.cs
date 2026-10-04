@@ -2,7 +2,6 @@ using System.Runtime.InteropServices;
 
 namespace SideDim;
 
-/// <summary>A hidden window that owns the global hotkey and raises <see cref="Pressed"/>.</summary>
 internal sealed class HotkeyWindow : NativeWindow, IDisposable
 {
     private const int Id = 1;
@@ -12,7 +11,6 @@ internal sealed class HotkeyWindow : NativeWindow, IDisposable
 
     public HotkeyWindow() => CreateHandle(new CreateParams());
 
-    /// <summary>Registers (replacing any previous hotkey). False when another app already owns the combination.</summary>
     public bool Register(Hotkey hotkey)
     {
         Unregister();
@@ -42,7 +40,6 @@ internal sealed class HotkeyWindow : NativeWindow, IDisposable
 
 internal static class AppIcon
 {
-    /// <summary>The embedded multi-size icon, at the size closest to <paramref name="size"/>.</summary>
     public static Icon Load(Size size)
     {
         using var stream = typeof(AppIcon).Assembly.GetManifestResourceStream("SideDim.ico")

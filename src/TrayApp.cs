@@ -3,27 +3,21 @@ using Microsoft.Win32;
 
 namespace SideDim;
 
-/// <summary>What the settings window needs from the app.</summary>
 internal interface ISettingsHost
 {
-    /// <summary>Saves Settings and re-applies dimming. Called after the settings window or tray menu changed Settings.</summary>
     void SaveAndApplySettings();
 
-    /// <summary>The Test button: "Dim now" around whatever window has focus, i.e. the settings window itself.</summary>
     void ToggleTest();
 
-    /// <summary>"Dim now" is on (from the hotkey, the tray menu or the Test button).</summary>
     bool IsDimNowOn { get; }
 
     event Action? DimNowChanged;
 
-    /// <summary>Stops the global hotkey while the user records a new one; registers the new one when resumed.</summary>
+    /// <summary>Resuming is what registers the hotkey now in Settings; saving alone does not.</summary>
     void SuspendHotkey(bool suspend);
 
-    /// <summary>False when the hotkey is invalid or another app already owns it.</summary>
     bool HotkeyWorks { get; }
 
-    /// <summary>Connected monitors. With one, backlight dimming is unavailable and the spotlight is always on.</summary>
     int MonitorCount { get; }
 
     event Action? DisplaysChanged;
@@ -32,9 +26,9 @@ internal interface ISettingsHost
 internal sealed class TrayApp : ApplicationContext, ISettingsHost
 {
     private static readonly TimeSpan ActivePoll = TimeSpan.FromMilliseconds(100);
-    private static readonly TimeSpan PausedPoll = TimeSpan.FromSeconds(1); // only keeps "Dim for <last app>" current
+    private static readonly TimeSpan PausedPoll = TimeSpan.FromSeconds(1);
 
-    // DDC/CI often ignores a monitor for the first seconds after it is plugged in or woken up.
+    /// <summary>DDC/CI often ignores a monitor for the first seconds after plug-in or wake, so dimming is applied again after this delay.</summary>
     private static readonly TimeSpan DisplaySettleDelay = TimeSpan.FromMilliseconds(2500);
 
     private readonly SynchronizationContext _ui;
@@ -52,10 +46,11 @@ internal sealed class TrayApp : ApplicationContext, ISettingsHost
     private readonly HardwareDimmer _backlight;
     private SettingsForm? _form;
 
-    private string? _dimNow;              // "Dim now" (hotkey, tray or Test button): the monitor kept bright
-    private string? _dimmedFor;           // monitor kept bright by the last ApplyDimming, for logging
-    private string? _lastExternalMonitor; // where the last real app window was, for "Dim now" from the tray
-    private readonly HashSet<string> _warnedNoDdc = []; // monitors the user was told about (UI thread only)
+    /// <summary>Device name of the monitor "Dim now" keeps bright, or null when "Dim now" is off.</summary>
+    private string? _dimNow;
+    private string? _dimmedFor;
+    private string? _lastExternalMonitor;
+    private readonly HashSet<string> _warnedNoDdc = [];
     private Rectangle? _appliedHole;
     private bool _spotlightDirty;
     private bool _hotkeySuspended;
@@ -69,6 +64,7 @@ internal sealed class TrayApp : ApplicationContext, ISettingsHost
     public event Action? DimNowChanged;
     public event Action? DisplaysChanged;
 
+    /// <remarks>The backlight dimmer must be created even in Overlay mode, because it restores brightness a crashed previous run left dimmed.</remarks>
     public TrayApp(SynchronizationContext ui)
     {
         _ui = ui;
@@ -77,7 +73,6 @@ internal sealed class TrayApp : ApplicationContext, ISettingsHost
 
         _overlay = new OverlayDimmer(() => _settings);
         _spotlight = new OverlayDimmer(() => _settings);
-        // Created even in Overlay mode: it restores brightness a crashed previous run left dimmed.
         _backlight = new HardwareDimmer(
             new BacklightController(
                 new DdcBrightnessDevice(),
@@ -89,7 +84,6 @@ internal sealed class TrayApp : ApplicationContext, ISettingsHost
         _tray = new NotifyIcon { Icon = _trayIcon, Visible = true, ContextMenuStrip = _menu.Strip };
         _tray.MouseClick += (_, e) => { if (e.Button == MouseButtons.Left) ShowSettings(); };
 
-        // The hotkey may count our settings window as the focused app: the user is looking at it when they press it.
         _hotkey.Pressed += () => ToggleDimNowCore(includeOwnWindows: true);
         RegisterHotkey();
 
@@ -98,7 +92,7 @@ internal sealed class TrayApp : ApplicationContext, ISettingsHost
         _displaySettled.Tick += (_, _) =>
         {
             _displaySettled.Stop();
-            ApplyDimming(); // second pass for monitors that weren't answering DDC/CI yet
+            ApplyDimming();
         };
 
         _monitorCount = Monitors.All().Count;
@@ -117,7 +111,6 @@ internal sealed class TrayApp : ApplicationContext, ISettingsHost
 
     private void Tick()
     {
-        // While testing, our own settings window stands in for the focused app.
         var fg = ForegroundWatcher.Current(includeOwnWindows: IsDimNowOn);
         if (fg is not null && fg.ProcessId != Environment.ProcessId)
         {
@@ -129,7 +122,6 @@ internal sealed class TrayApp : ApplicationContext, ISettingsHost
             }
         }
 
-        // "Dim now" follows the window to another monitor, the same way automatic dimming does.
         if (_dimNow is not null && fg is not null && fg.Monitor.Device != _dimNow) _dimNow = fg.Monitor.Device;
 
         var desired = _dimNow
@@ -142,10 +134,7 @@ internal sealed class TrayApp : ApplicationContext, ISettingsHost
         UpdateSpotlight(fg);
     }
 
-    /// <summary>
-    /// Dims every monitor except the one the debouncer says to keep bright. With nothing dimmed this
-    /// still runs the backlight restore, which retries monitors that were unplugged while dimmed.
-    /// </summary>
+    /// <remarks>Must run even with nothing dimmed so the backlight restore retries unplugged monitors; an unplugged kept monitor is dropped, or every screen would dim.</remarks>
     private void ApplyDimming()
     {
         var monitors = Monitors.All();
@@ -153,7 +142,6 @@ internal sealed class TrayApp : ApplicationContext, ISettingsHost
         var keep = _debouncer.Applied;
         if (keep is not null && monitors.All(m => m.Device != keep))
         {
-            // The kept monitor was unplugged; dimming "all the others" would dim everything.
             keep = null;
             _dimNow = null;
             _debouncer.ForceApply(null);
@@ -170,14 +158,13 @@ internal sealed class TrayApp : ApplicationContext, ISettingsHost
         UpdateTooltip();
     }
 
-    /// <summary>Darkens the focused screen around the focused window. Follows the window as it moves.</summary>
+    /// <remarks>A taskbar or desktop click leaves no foreground window; the spotlight then stays until dimming ends instead of flashing off.</remarks>
     private void UpdateSpotlight(Foreground? fg)
     {
-        // A click on the taskbar or desktop shouldn't flash the spotlight off; it ends when dimming ends.
         if (fg is null && _debouncer.Applied is not null && !_spotlightDirty) return;
 
         var levels = fg is null ? default : _settings.LevelsFor(fg.Monitor.Id);
-        var on = DimPolicy.SpotlightOn(_settings, _monitorCount) && levels.Dim; // a "never dim" screen gets no spotlight either
+        var on = DimPolicy.SpotlightOn(_settings, _monitorCount) && levels.Dim;
         var hole = fg is null ? null
             : DimPolicy.SpotlightHole(on, _debouncer.Applied, fg.Monitor.Device, fg.Bounds, fg.IsFullscreen);
 
@@ -187,19 +174,15 @@ internal sealed class TrayApp : ApplicationContext, ISettingsHost
         _spotlight.Apply(hole is null || fg is null ? [] : [new DimTarget(fg.Monitor, levels.OverlayStrength, levels.BacklightLevel, hole)]);
     }
 
-    /// <summary>The settings window's Test button: the settings window itself stands in for the focused app.</summary>
     public void ToggleTest() => ToggleDimNowCore(includeOwnWindows: true);
 
-    /// <summary>"Dim now" from the tray menu: keeps the monitor of the app you were using bright.</summary>
     public void ToggleDimNow() => ToggleDimNowCore(includeOwnWindows: false);
 
+    /// <remarks>Off hands back to the automatic rule instead of restoring, so screens don't flash; from the tray the foreground is SideDim's own menu window, hence the last real app's monitor.</remarks>
     private void ToggleDimNowCore(bool includeOwnWindows)
     {
         if (_dimNow is not null)
         {
-            // Hand back to the automatic rule rather than forcing a restore: if the app still has focus
-            // the screens just stay dim, instead of flashing bright and dimming again. With automatic
-            // dimming paused there's nothing to hand back to, so restore right away.
             _dimNow = null;
             if (!_settings.Enabled)
             {
@@ -210,7 +193,6 @@ internal sealed class TrayApp : ApplicationContext, ISettingsHost
         }
         else
         {
-            // From the tray the foreground is our own (invisible) menu window, so fall back to the last real app.
             _dimNow = ForegroundWatcher.Current(includeOwnWindows)?.Monitor.Device
                 ?? _lastExternalMonitor
                 ?? Screen.FromPoint(Cursor.Position).DeviceName;
@@ -225,7 +207,7 @@ internal sealed class TrayApp : ApplicationContext, ISettingsHost
     {
         _settings.Normalize().Save();
         if (!_settings.Enabled && _dimNow is null && _debouncer.Applied is not null) _debouncer.ForceApply(null);
-        ApplyDimming(); // picks up mode and strength changes
+        ApplyDimming();
         UpdatePollRate();
     }
 
@@ -238,7 +220,7 @@ internal sealed class TrayApp : ApplicationContext, ISettingsHost
 
     private void RegisterHotkey()
     {
-        if (_hotkeySuspended) return; // the user is recording a new one in the settings window
+        if (_hotkeySuspended) return;
         HotkeyWorks = Hotkey.TryParse(_settings.ToggleHotkey, out var hk) && _hotkey.Register(hk);
         if (!HotkeyWorks) Log.Write($"Could not register hotkey '{_settings.ToggleHotkey}' (invalid or taken by another app)");
     }
@@ -260,7 +242,6 @@ internal sealed class TrayApp : ApplicationContext, ISettingsHost
         _form.Activate();
     }
 
-    /// <summary>Adds or removes the last focused app from the list (tray menu shortcut).</summary>
     public void ToggleLastApp()
     {
         if (LastApp.Length == 0) return;
@@ -283,11 +264,11 @@ internal sealed class TrayApp : ApplicationContext, ISettingsHost
         _form?.ReloadValues();
     }
 
-    /// <summary>Called on the DDC/CI thread whenever a monitor doesn't answer; tells the user once, when it matters.</summary>
+    /// <remarks>Runs on the DDC/CI thread, so it must post to the UI thread before touching state.</remarks>
     private void OnNoDdc(string monitor) => _ui.Post(_ =>
     {
-        if (_settings.Mode != DimMode.Hardware) return; // in Both mode the overlay still dims it
-        if (_displaySettled.Enabled) return;          // just plugged in or woken up: the settled pass decides
+        if (_settings.Mode != DimMode.Hardware) return;
+        if (_displaySettled.Enabled) return;
         if (!_warnedNoDdc.Add(monitor)) return;
         _tray.ShowBalloonTip(8000, "SideDim",
             "A monitor doesn't answer DDC/CI, so its backlight can't be dimmed. Turn on DDC/CI in the monitor's own menu, or switch to Overlay or Both.",
@@ -302,15 +283,12 @@ internal sealed class TrayApp : ApplicationContext, ISettingsHost
 
     private void OnDisplaysChanged(object? sender, EventArgs e) => _ui.Post(_ =>
     {
-        // Re-place overlays, re-resolve DDC handles, recount monitors, and retry restoring monitors
-        // that came back. Then once more after the layout settles, for monitors that wake up slowly.
         _displaySettled.Stop();
         _displaySettled.Start();
         ApplyDimming();
         DisplaysChanged?.Invoke();
     }, null);
 
-    /// <summary>Logoff, restart or shutdown: clean up fully (restoring brightness) before Windows ends the process.</summary>
     private void OnSessionEnded(object? sender, SessionEndedEventArgs e)
     {
         Log.Write($"Session ended ({e.Reason})");
@@ -321,13 +299,13 @@ internal sealed class TrayApp : ApplicationContext, ISettingsHost
     {
         _poll.Stop();
         _displaySettled.Stop();
-        _tray.Visible = false; // disappear right away; the restore below can take a moment
+        _tray.Visible = false;
         SystemEvents.DisplaySettingsChanged -= OnDisplaysChanged;
         SystemEvents.SessionEnded -= OnSessionEnded;
         _form?.Close();
         _spotlight.Dispose();
         _overlay.Dispose();
-        _backlight.Dispose(); // waits (up to 5 s) until every monitor has its brightness back
+        _backlight.Dispose();
         _hotkey.Dispose();
         _tray.Dispose();
         _menu.Dispose();
@@ -338,7 +316,7 @@ internal sealed class TrayApp : ApplicationContext, ISettingsHost
         base.ExitThreadCore();
     }
 
-    /// <summary>Last-ditch restore from the crash handler. Only touches thread-safe parts.</summary>
+    /// <remarks>Called from the crash handler on any thread, so it must only touch thread-safe parts.</remarks>
     public void EmergencyRestore()
     {
         try
@@ -352,15 +330,13 @@ internal sealed class TrayApp : ApplicationContext, ISettingsHost
 
         try
         {
-            _tray.Visible = false; // no ghost icon left in the tray
+            _tray.Visible = false;
         }
         catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception)
         {
-            // Best effort only.
         }
     }
 
-    /// <summary>The right-click menu. Built once; checkmarks and labels refresh each time it opens.</summary>
     private sealed class TrayMenu : IDisposable
     {
         private readonly Font _bold;
@@ -408,7 +384,7 @@ internal sealed class TrayApp : ApplicationContext, ISettingsHost
 
         public void Dispose()
         {
-            Strip.Dispose(); // disposes its items too
+            Strip.Dispose();
             _bold.Dispose();
         }
     }

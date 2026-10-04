@@ -1,9 +1,7 @@
 namespace SideDim.Tests;
 
-/// <summary>The threaded wrapper that keeps slow DDC/CI calls off the UI thread.</summary>
 public class HardwareDimmerTests
 {
-    // Device and Id differ on purpose: saved brightness must be keyed by the stable Id, not \\.\DISPLAYn.
     private static Monitor Screen(string id) => new(IntPtr.Zero, Device: @"\\.\DISPLAY" + id, Id: id, Rectangle.Empty);
 
     private static DimTarget Target(string id, int backlight) => new(Screen(id), OverlayStrength: 70, BacklightLevel: backlight);
@@ -46,7 +44,7 @@ public class HardwareDimmerTests
         var monitors = new ThrowOnceMonitors(new FakeMonitors(t).Add("D1", 70));
         using var dimmer = new HardwareDimmer(new BacklightController(monitors, new FakeStore(t)));
 
-        dimmer.Apply([Target("D1", 10)]); // throws inside the worker
+        dimmer.Apply([Target("D1", 10)]);
         dimmer.Apply([Target("D1", 10)]);
         Assert.True(dimmer.Flush());
         Assert.Equal(10u, monitors.Inner.Brightness["D1"]);

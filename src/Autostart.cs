@@ -2,16 +2,14 @@ using Microsoft.Win32;
 
 namespace SideDim;
 
-/// <summary>"Start with Windows", as a value under HKCU\...\Run (no admin rights needed).</summary>
 internal static class Autostart
 {
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string ValueName = "SideDim";
 
-    /// <summary>On only when the Run entry points at this exe; a stale entry for a moved exe counts as off.</summary>
+    /// <summary>A stale Run entry for a moved exe counts as off.</summary>
     public static bool IsOn => PointsAt(Stored(), Environment.ProcessPath);
 
-    /// <summary>Turns autostart on or off; returns false (and logs) when the registry refuses.</summary>
     public static bool TrySet(bool on)
     {
         try
@@ -28,10 +26,7 @@ internal static class Autostart
         }
     }
 
-    /// <summary>
-    /// Points autostart here when it points at an exe that's gone (moved) or at an older SideDim
-    /// (a newer version downloaded next to it). Another, newer or unrelated exe is left alone.
-    /// </summary>
+    /// <summary>Repoints only from a missing exe or an older SideDim; a newer SideDim or an unrelated exe is left alone.</summary>
     public static void RepairPath()
     {
         if (Stored() is not { } stored || PointsAt(stored, Environment.ProcessPath)) return;
@@ -48,7 +43,6 @@ internal static class Autostart
             && Version.TryParse(currentVersion, out var current)
             && old < current);
 
-    /// <summary>The product version if the exe is a SideDim build, else null.</summary>
     private static string? SideDimVersion(string exe)
     {
         try

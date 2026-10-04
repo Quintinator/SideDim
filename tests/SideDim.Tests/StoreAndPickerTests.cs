@@ -57,7 +57,7 @@ public sealed class FileBrightnessStoreTests : IDisposable
     [Fact]
     public void Save_reports_failure_instead_of_throwing()
     {
-        Directory.CreateDirectory(StatePath); // a folder where the file should go
+        Directory.CreateDirectory(StatePath);
         Assert.False(new FileBrightnessStore(StatePath).Save(new Dictionary<string, uint> { ["D1"] = 50 }));
     }
 }
@@ -101,11 +101,11 @@ public class AppPickerTests
 public class AutostartTests
 {
     [Theory]
-    [InlineData(false, null, "0.2.0", true)]     // moved or deleted: take over
-    [InlineData(true, "0.1.0", "0.2.0", true)]   // older SideDim next to the new download: take over
-    [InlineData(true, "0.3.0", "0.2.0", false)]  // a newer SideDim: leave it
-    [InlineData(true, "0.2.0", "0.2.0", false)]  // another copy of this version: leave it
-    [InlineData(true, null, "0.2.0", false)]     // some other program: leave it
+    [InlineData(false, null, "0.2.0", true)]
+    [InlineData(true, "0.1.0", "0.2.0", true)]
+    [InlineData(true, "0.3.0", "0.2.0", false)]
+    [InlineData(true, "0.2.0", "0.2.0", false)]
+    [InlineData(true, null, "0.2.0", false)]
     public void Repoints_only_from_a_missing_or_older_SideDim(bool exists, string? version, string current, bool expected) =>
         Assert.Equal(expected, Autostart.ShouldRepoint(exists, version, current));
 

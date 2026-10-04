@@ -2,18 +2,16 @@ using System.Collections.Concurrent;
 
 namespace SideDim;
 
-/// <param name="OverlayStrength">Overlay darkness for this screen, 0 to <see cref="Settings.MaxOverlayStrength"/>.</param>
-/// <param name="BacklightLevel">Backlight level for this screen while dimmed, 0 to 100.</param>
-/// <param name="Hole">Area left undimmed (the focused window), in screen pixels. Overlay only.</param>
+/// <param name="Hole">In screen pixels, not overlay coordinates; only the overlay dimmer uses it.</param>
 internal sealed record DimTarget(Monitor Monitor, int OverlayStrength, int BacklightLevel, Rectangle? Hole = null);
 
 internal interface IDimmer : IDisposable
 {
-    /// <summary>Dim exactly these monitors; anything dimmed before and not in the list goes back to normal.</summary>
+    /// <summary>Full state, not a delta: a monitor dimmed before and missing from the list must go back to normal.</summary>
     void Apply(IReadOnlyList<DimTarget> targets);
 }
 
-/// <summary>Black, click-through, topmost window over each monitor. Works on every display. UI thread only.</summary>
+/// <summary>UI thread only.</summary>
 internal sealed class OverlayDimmer(Func<Settings> settings) : IDimmer
 {
     private readonly Dictionary<string, OverlayForm> _overlays = [];
@@ -64,6 +62,7 @@ internal sealed class OverlayDimmer(Func<Settings> settings) : IDimmer
         private Rectangle? _hole;
         private Size _regionSize;
 
+        /// <remarks>Never set TopMost: WinForms applies it with an activating SetWindowPos that steals focus; WS_EX_TOPMOST plus Place keeps it on top instead.</remarks>
         public OverlayForm(Rectangle bounds)
         {
             FormBorderStyle = FormBorderStyle.None;
@@ -72,8 +71,6 @@ internal sealed class OverlayDimmer(Func<Settings> settings) : IDimmer
             AutoScaleMode = AutoScaleMode.None;
             BackColor = Color.Black;
             Bounds = bounds;
-            // No TopMost = true here: WinForms applies it with a SetWindowPos that activates the window,
-            // which would steal focus from the game. WS_EX_TOPMOST plus Place() does it without activating.
             Opacity = 0;
             _timer.Tick += (_, _) => Step();
         }
@@ -91,9 +88,9 @@ internal sealed class OverlayDimmer(Func<Settings> settings) : IDimmer
             }
         }
 
+        /// <remarks>Ignores WM_DPICHANGED: bounds are already physical pixels, so WinForms must not rescale them on a DPI boundary.</remarks>
         protected override void WndProc(ref Message m)
         {
-            // Bounds are already in physical pixels; don't let WinForms rescale when crossing DPI boundaries.
             if (m.Msg == Native.WM_DPICHANGED) return;
             base.WndProc(ref m);
         }
@@ -104,10 +101,8 @@ internal sealed class OverlayDimmer(Func<Settings> settings) : IDimmer
                 Log.Write($"Could not position overlay at {b} (error {System.Runtime.InteropServices.Marshal.GetLastWin32Error()})");
         }
 
-        /// <param name="hole">In overlay coordinates, or null to cover the whole monitor.</param>
         public void SetHole(Rectangle? hole)
         {
-            // Also rebuild when the monitor's resolution changed under an unchanged hole.
             if (hole == _hole && (hole is null || Size == _regionSize)) return;
             _hole = hole;
             _regionSize = Size;
@@ -159,10 +154,7 @@ internal sealed class OverlayDimmer(Func<Settings> settings) : IDimmer
     }
 }
 
-/// <summary>
-/// Runs a <see cref="BacklightController"/> on its own thread: DDC/CI calls take tens of milliseconds
-/// each and must never block the UI thread.
-/// </summary>
+/// <summary>DDC/CI calls take tens of milliseconds each, so they run on a worker thread and must never block the UI thread.</summary>
 internal sealed class HardwareDimmer : IDimmer
 {
     private readonly BacklightController _controller;
@@ -183,15 +175,14 @@ internal sealed class HardwareDimmer : IDimmer
         }
     }
 
+    /// <remarks>Keyed by Monitor.Id, not Device, because Windows can renumber devices.</remarks>
     public void Apply(IReadOnlyList<DimTarget> targets)
     {
         if (Volatile.Read(ref _disposed) != 0) return;
-        // Keyed by the stable id; each screen can have its own level.
         var levels = targets.ToDictionary(t => t.Monitor.Id, t => (uint)Math.Clamp(t.BacklightLevel, 0, 100), StringComparer.OrdinalIgnoreCase);
         _queue.Add(() => _controller.Apply(levels));
     }
 
-    /// <summary>Blocks until everything queued so far has run (or the timeout passes).</summary>
     public bool Flush(TimeSpan? timeout = null)
     {
         if (Volatile.Read(ref _disposed) != 0) return true;
@@ -209,13 +200,12 @@ internal sealed class HardwareDimmer : IDimmer
         }
     }
 
-    /// <summary>Restores every monitor, then stops the worker. Safe to call from any thread, more than once.</summary>
+    /// <remarks>Safe from any thread, more than once. Dispose the queue only after the worker stopped; the join stays capped so a hung DDC/CI bus can't block exit.</remarks>
     public void Dispose()
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
         _queue.Add(_controller.RestoreAll);
         _queue.CompleteAdding();
-        // Only dispose once the worker has really stopped; a hung DDC/CI bus must not break the exit path.
         if (_worker.Join(TimeSpan.FromSeconds(5))) _queue.Dispose();
         else Log.Write("Gave up waiting for monitors to restore; hardware-state.json will finish the job on next start.");
     }

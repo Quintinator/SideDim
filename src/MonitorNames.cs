@@ -2,10 +2,6 @@ using System.Runtime.InteropServices;
 
 namespace SideDim;
 
-/// <summary>
-/// Monitor names as the monitors report them ("MSI MAG401QR"), from the Windows display configuration.
-/// Keyed by the same device path that <see cref="Monitor.Id"/> uses.
-/// </summary>
 internal static class MonitorNames
 {
     private const uint QDC_ONLY_ACTIVE_PATHS = 2;
@@ -51,7 +47,7 @@ internal static class MonitorNames
         public uint Flags;
     }
 
-    // Only the size matters here; the union inside is never read.
+    /// <summary>DISPLAYCONFIG_MODE_INFO without its never-read union; Size must stay 64 to match the native struct.</summary>
     [StructLayout(LayoutKind.Sequential, Size = 64)]
     private struct MODE_INFO
     {
@@ -84,7 +80,7 @@ internal static class MonitorNames
     [DllImport("user32.dll")]
     private static extern int DisplayConfigGetDeviceInfo(ref TARGET_DEVICE_NAME request);
 
-    /// <summary>Device path to name for every active monitor; empty if Windows won't say (old drivers, remote desktop).</summary>
+    /// <summary>Keyed by the same device path as <see cref="Monitor.Id"/>; empty with old drivers or over remote desktop.</summary>
     public static Dictionary<string, string> Query()
     {
         var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);

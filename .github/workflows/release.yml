@@ -1,6 +1,5 @@
 name: Release
 
-# Push a tag like v0.2.0 to build, test and publish a GitHub release with both exes attached.
 on:
   push:
     tags: ['v*']
@@ -34,7 +33,6 @@ jobs:
           Copy-Item artifacts/publish/framework-dependent/SideDim.exe "release/SideDim-$v-win-x64-needs-dotnet8.exe"
           Copy-Item LICENSE release/LICENSE.txt
 
-      # GitHub's own CLI (preinstalled on the runner) rather than a third-party action holding a write token.
       - name: Publish GitHub release
         shell: bash
         env:

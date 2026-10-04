@@ -5,9 +5,9 @@ internal static class Log
     private const long MaxBytes = 512 * 1024;
     private static readonly object Gate = new();
 
-    /// <summary>Where log lines go. Tests swap this out so they don't write to the real log.</summary>
     public static Action<string> Sink { get; set; } = WriteToFile;
 
+    /// <summary>Swallows I/O errors: a full disk or locked log must never take the app down.</summary>
     public static void Write(string message)
     {
         try
@@ -16,7 +16,6 @@ internal static class Log
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            // A full disk or locked log must never take the app down.
         }
     }
 
@@ -27,7 +26,7 @@ internal static class Log
             Directory.CreateDirectory(AppPaths.Folder);
             var path = AppPaths.LogFile;
             if (File.Exists(path) && new FileInfo(path).Length > MaxBytes)
-                File.Move(path, path + ".old", overwrite: true); // keep one previous log for bug reports
+                File.Move(path, path + ".old", overwrite: true);
             File.AppendAllText(path, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} {message}{Environment.NewLine}");
         }
     }

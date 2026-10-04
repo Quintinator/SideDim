@@ -2,11 +2,10 @@ using System.Text.Json;
 
 namespace SideDim;
 
-/// <summary>Keeps the pre-dim brightness in a small JSON file; no file means nothing is dimmed.</summary>
-/// <param name="legacyPath">Where version 0.1.0 kept the file (roaming); moved to <paramref name="path"/> on load.</param>
 internal sealed class FileBrightnessStore(string path, string? legacyPath = null) : IBrightnessStore
 {
-    private bool _readOnly; // the file exists but couldn't be read: never overwrite the only crash backup
+    /// <summary>Set when the file exists but couldn't be read; Save then fails so the only crash backup is never overwritten.</summary>
+    private bool _readOnly;
 
     public Dictionary<string, uint> Load()
     {
@@ -18,7 +17,6 @@ internal sealed class FileBrightnessStore(string path, string? legacyPath = null
         }
         catch (JsonException e)
         {
-            // Keep the damaged file for inspection instead of letting the next save overwrite it.
             var aside = path + ".corrupt";
             try { File.Move(path, aside, overwrite: true); }
             catch (Exception m) when (m is IOException or UnauthorizedAccessException) { aside = path; }
@@ -50,7 +48,7 @@ internal sealed class FileBrightnessStore(string path, string? legacyPath = null
 
     public bool Save(IReadOnlyDictionary<string, uint> originals)
     {
-        if (_readOnly) return false; // BacklightController then leaves the monitor alone
+        if (_readOnly) return false;
         try
         {
             if (originals.Count == 0)
