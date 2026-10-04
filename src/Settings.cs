@@ -7,6 +7,26 @@ internal enum DimMode { Overlay, Hardware, Both }
 
 internal enum DimTrigger { SelectedApps, AnyWindow }
 
+/// <summary>What one screen does while it's dimmed.</summary>
+internal readonly record struct ScreenLevels(bool Dim, int BacklightLevel, int OverlayStrength);
+
+/// <summary>Overrides for one physical monitor. Anything left null follows the settings for all screens.</summary>
+internal sealed class MonitorSettings
+{
+    /// <summary>The monitor's name when it was last seen, so settings.json stays readable.</summary>
+    public string? Name { get; set; }
+
+    /// <summary>False: SideDim never darkens this screen (not dimmed, no spotlight).</summary>
+    public bool Dim { get; set; } = true;
+
+    public int? BacklightLevel { get; set; }
+    public int? OverlayStrength { get; set; }
+
+    [JsonIgnore] public bool HasOwnLevels => BacklightLevel is not null || OverlayStrength is not null;
+
+    [JsonIgnore] public bool IsDefault => Dim && !HasOwnLevels;
+}
+
 internal sealed class Settings
 {
     public const int MaxDelayMs = 10_000;
@@ -57,6 +77,9 @@ internal sealed class Settings
     public int FadeMs { get; set; } = 300;
 
     public string ToggleHotkey { get; set; } = DefaultHotkey;
+
+    /// <summary>Per-monitor overrides, keyed by the monitor's stable id (see <see cref="Monitor.Id"/>).</summary>
+    public Dictionary<string, MonitorSettings> Monitors { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
     [JsonIgnore] public bool IsFirstRun { get; private set; }
 
@@ -158,7 +181,34 @@ internal sealed class Settings
         // Older files stored the built-in list; keep only what the user added, so new built-ins reach them.
         NeverDimFor = NeverDimFor is null ? [] : Distinct(NeverDimFor.Where(n => n is not null && !ListContains(BuiltInNeverDimFor, AppName(n))));
         Apps = Apps is null ? [] : Distinct(Apps);
+        Monitors = NormalizeMonitors(Monitors);
         return this;
+    }
+
+    private static Dictionary<string, MonitorSettings> NormalizeMonitors(Dictionary<string, MonitorSettings>? monitors)
+    {
+        var result = new Dictionary<string, MonitorSettings>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (id, m) in monitors ?? [])
+        {
+            if (string.IsNullOrWhiteSpace(id) || m is null) continue;
+            if (m.BacklightLevel is { } b) m.BacklightLevel = Math.Clamp(b, 0, 100);
+            if (m.OverlayStrength is { } o) m.OverlayStrength = Math.Clamp(o, 0, MaxOverlayStrength);
+            if (!m.IsDefault) result[id] = m; // nothing to remember for a screen that follows the defaults
+        }
+        return result;
+    }
+
+    /// <summary>How a screen is dimmed: its own overrides where set, the settings for all screens otherwise.</summary>
+    public ScreenLevels LevelsFor(string monitorId) => Monitors.TryGetValue(monitorId, out var m)
+        ? new ScreenLevels(m.Dim, m.BacklightLevel ?? BacklightLevel, m.OverlayStrength ?? OverlayStrength)
+        : new ScreenLevels(true, BacklightLevel, OverlayStrength);
+
+    /// <summary>The overrides for a monitor, created on first use. Drop unused ones with <see cref="Normalize"/>.</summary>
+    public MonitorSettings MonitorFor(string monitorId, string? name)
+    {
+        if (!Monitors.TryGetValue(monitorId, out var m)) Monitors[monitorId] = m = new MonitorSettings();
+        if (name is not null) m.Name = name;
+        return m;
     }
 
     /// <summary>Adds an exe path or process name. Returns false if an app with that name is already listed.</summary>

@@ -101,9 +101,12 @@ internal static class Program
             Console.WriteLine(note);
             Log.Write(note);
         }
+        var names = MonitorNames.Query();
+        var monitors = Monitors.All().ToDictionary(m => m.Device);
         foreach (var (device, brightness) in new DdcBrightnessDevice().Probe())
         {
-            var line = $"probe {device}: {(brightness is null ? "no DDC/CI" : $"brightness {brightness}")}";
+            var name = monitors.TryGetValue(device, out var m) && names.TryGetValue(m.Id, out var n) ? $" ({n})" : "";
+            var line = $"probe {device}{name}: {(brightness is null ? "no DDC/CI" : $"brightness {brightness}")}";
             Console.WriteLine(line);
             Log.Write(line);
         }

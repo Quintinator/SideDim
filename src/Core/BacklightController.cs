@@ -39,15 +39,17 @@ internal sealed class BacklightController(IBrightnessDevice device, IBrightnessS
     /// <summary>Monitors we have dimmed and their brightness before that.</summary>
     public IReadOnlyDictionary<string, uint> Originals => _originals;
 
-    /// <summary>Dim exactly <paramref name="dim"/> to <paramref name="level"/>; restore every other monitor we dimmed.</summary>
-    public void Apply(IReadOnlyCollection<string> dim, uint level)
+    /// <summary>Dim exactly <paramref name="dim"/> to one <paramref name="level"/>; restore every other monitor we dimmed.</summary>
+    public void Apply(IReadOnlyCollection<string> dim, uint level) => Apply(dim.ToDictionary(d => d, _ => level));
+
+    /// <summary>Dim exactly these monitors, each to its own level; restore every other monitor we dimmed.</summary>
+    public void Apply(IReadOnlyDictionary<string, uint> levels)
     {
-        level = Math.Min(level, 100);
+        foreach (var name in _originals.Keys.Where(n => !levels.ContainsKey(n)).ToList()) Restore(name);
 
-        foreach (var name in _originals.Keys.Except(dim).ToList()) Restore(name);
-
-        foreach (var name in dim)
+        foreach (var (name, requested) in levels)
         {
+            var level = Math.Min(requested, 100);
             if (!device.IsConnected(name)) continue;
 
             var firstTime = !_originals.TryGetValue(name, out var original);

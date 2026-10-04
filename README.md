@@ -22,7 +22,8 @@ SideDim is a small Windows tray app that darkens every screen except the one you
 Only one screen? SideDim works there too: it darkens everything around the focused window, so only the app you're using stays lit.
 
 <p align="center">
-  <img src="docs/screenshot.png" width="430" alt="The SideDim settings window">
+  <img src="docs/screenshot.png" width="410" alt="SideDim settings, Simple tab: apps to dim for and how dark">
+  <img src="docs/screenshot-advanced.png" width="410" alt="SideDim settings, Advanced tab: per-screen darkness, timing and hotkey">
 </p>
 
 ## Features
@@ -39,6 +40,9 @@ Only one screen? SideDim works there too: it darkens everything around the focus
 - **Spotlight.** Also darkens the focused window's own screen, leaving only the window lit. The cut-out follows the window when you move it.
 - **Works on a single monitor.** With one screen there's nothing beside it to dim, so SideDim turns the spotlight on by itself. The backlight options need a second monitor, so they're greyed out until one is connected; your choice is kept and comes back when you plug one in.
 - **Two sliders.** One for the backlight level, one for overlay darkness. A screen you already turned down further is never brightened.
+- **Per-screen settings.** On the Advanced tab, give a screen its own darkness (say, the one next to you a bit lighter) or set it to never dim (the one with your stream chat or meeting notes).
+- **Identify screens.** Shows a big number and the monitor's name on each screen, so two identical monitors are easy to tell apart.
+- **Simple and Advanced tabs.** The everyday choices on one tab; per-screen settings, timing and the hotkey on the other.
 - **Test button.** Uses the settings window as the focused app, so you can tune everything live without starting a game or opening a document.
 - **Dim now hotkey.** `Ctrl+Alt+F9` by default, for a quick focus session, a windowed game or a video. Any combination with Ctrl or Alt works; bare keys and Alt+F4 are refused so SideDim never steals keys from games or other apps.
 - **Your brightness comes back.** SideDim saves each monitor's brightness to disk before it changes anything. After a crash or power cut, the next start restores it. An unplugged monitor is restored when it comes back.
@@ -80,15 +84,16 @@ Everything in the settings window applies immediately. Settings are stored in `%
 | `Spotlight` | `false` | Also darken around the focused window on its own screen. Always on when only one monitor is connected |
 | `NeverDimFor` | `[]` | Extra apps that never trigger dimming (file only). Explorer, the Start menu, search and the snipping tools are always excluded |
 | `DimDelayMs` | `800` | How long a window must have focus before dimming, so quick alt-tabs don't flicker |
-| `RestoreDelayMs` | `200` | How long before restoring after focus leaves (file only) |
-| `FadeMs` | `300` | Overlay fade time, 0 to 2000 (file only) |
+| `RestoreDelayMs` | `200` | How long before restoring after focus leaves |
+| `FadeMs` | `300` | Overlay fade time, 0 to 2000 |
 | `ToggleHotkey` | `Ctrl+Alt+F9` | The Dim now hotkey. A function key is the default because Ctrl+Alt+letter is AltGr+letter on many keyboard layouts |
+| `Monitors` | `{}` | Per-screen overrides, keyed by the monitor's id: `Dim` (false = never dim), `BacklightLevel` and `OverlayStrength` (leave out to use the shared value). Easiest to set on the Advanced tab |
 
 ## Command line
 
 | Flag | What it does |
 |---|---|
-| `--probe` | Lists which monitors answer DDC/CI and their current brightness. Printed to the console and written to the log, handy for bug reports. |
+| `--probe` | Lists each monitor with its name, whether it answers DDC/CI and its current brightness. Printed to the console and written to the log, handy for bug reports. |
 
 ## Files
 

@@ -82,8 +82,7 @@ internal sealed class TrayApp : ApplicationContext, ISettingsHost
             new BacklightController(
                 new DdcBrightnessDevice(),
                 new FileBrightnessStore(AppPaths.BrightnessStateFile, legacyPath: Path.Combine(AppPaths.Folder, "hardware-state.json")),
-                OnNoDdc),
-            () => _settings.BacklightLevel);
+                OnNoDdc));
 
         _trayIcon = AppIcon.Load(SystemInformation.SmallIconSize);
         _menu = new TrayMenu(this);
@@ -161,7 +160,7 @@ internal sealed class TrayApp : ApplicationContext, ISettingsHost
             DimNowChanged?.Invoke();
         }
 
-        List<DimTarget> others = keep is null ? [] : monitors.Where(m => m.Device != keep).Select(m => new DimTarget(m)).ToList();
+        var others = DimPolicy.Targets(_settings, monitors, keep);
         _backlight.Apply(_settings.UsesBacklight ? others : []);
         _overlay.Apply(_settings.UsesOverlay ? others : []);
 
@@ -177,14 +176,15 @@ internal sealed class TrayApp : ApplicationContext, ISettingsHost
         // A click on the taskbar or desktop shouldn't flash the spotlight off; it ends when dimming ends.
         if (fg is null && _debouncer.Applied is not null && !_spotlightDirty) return;
 
-        var on = DimPolicy.SpotlightOn(_settings, _monitorCount);
+        var levels = fg is null ? default : _settings.LevelsFor(fg.Monitor.Id);
+        var on = DimPolicy.SpotlightOn(_settings, _monitorCount) && levels.Dim; // a "never dim" screen gets no spotlight either
         var hole = fg is null ? null
             : DimPolicy.SpotlightHole(on, _debouncer.Applied, fg.Monitor.Device, fg.Bounds, fg.IsFullscreen);
 
         if (hole == _appliedHole && !_spotlightDirty) return;
         _appliedHole = hole;
         _spotlightDirty = false;
-        _spotlight.Apply(hole is null || fg is null ? [] : [new DimTarget(fg.Monitor, hole)]);
+        _spotlight.Apply(hole is null || fg is null ? [] : [new DimTarget(fg.Monitor, levels.OverlayStrength, levels.BacklightLevel, hole)]);
     }
 
     /// <summary>The settings window's Test button: the settings window itself stands in for the focused app.</summary>

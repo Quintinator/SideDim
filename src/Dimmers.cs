@@ -2,8 +2,10 @@ using System.Collections.Concurrent;
 
 namespace SideDim;
 
+/// <param name="OverlayStrength">Overlay darkness for this screen, 0 to <see cref="Settings.MaxOverlayStrength"/>.</param>
+/// <param name="BacklightLevel">Backlight level for this screen while dimmed, 0 to 100.</param>
 /// <param name="Hole">Area left undimmed (the focused window), in screen pixels. Overlay only.</param>
-internal sealed record DimTarget(Monitor Monitor, Rectangle? Hole = null);
+internal sealed record DimTarget(Monitor Monitor, int OverlayStrength, int BacklightLevel, Rectangle? Hole = null);
 
 internal interface IDimmer : IDisposable
 {
@@ -20,7 +22,6 @@ internal sealed class OverlayDimmer(Func<Settings> settings) : IDimmer
     public void Apply(IReadOnlyList<DimTarget> targets)
     {
         var s = settings();
-        var opacity = Math.Clamp(s.OverlayStrength, 0, Settings.MaxOverlayStrength) / 100.0;
         var wanted = targets.Select(t => t.Monitor.Device).ToHashSet();
 
         foreach (var (device, form) in _overlays.ToList())
@@ -42,7 +43,7 @@ internal sealed class OverlayDimmer(Func<Settings> settings) : IDimmer
             }
             form.Place(t.Monitor.Bounds);
             form.SetHole(t.Hole is { } h ? DimPolicy.ToOverlayCoordinates(h, t.Monitor.Bounds) : null);
-            form.FadeTo(opacity, s.FadeMs, closeWhenDone: false);
+            form.FadeTo(Math.Clamp(t.OverlayStrength, 0, Settings.MaxOverlayStrength) / 100.0, s.FadeMs, closeWhenDone: false);
         }
     }
 
@@ -165,15 +166,13 @@ internal sealed class OverlayDimmer(Func<Settings> settings) : IDimmer
 internal sealed class HardwareDimmer : IDimmer
 {
     private readonly BacklightController _controller;
-    private readonly Func<int> _level;
     private readonly BlockingCollection<Action> _queue = [];
     private readonly Thread _worker;
     private int _disposed;
 
-    public HardwareDimmer(BacklightController controller, Func<int> level)
+    public HardwareDimmer(BacklightController controller)
     {
         _controller = controller;
-        _level = level;
         _worker = new Thread(Work) { IsBackground = true, Name = "DDC/CI" };
         _worker.Start();
 
@@ -187,9 +186,9 @@ internal sealed class HardwareDimmer : IDimmer
     public void Apply(IReadOnlyList<DimTarget> targets)
     {
         if (Volatile.Read(ref _disposed) != 0) return;
-        var devices = targets.Select(t => t.Monitor.Id).ToList();
-        var level = (uint)Math.Clamp(_level(), 0, 100);
-        _queue.Add(() => _controller.Apply(devices, level));
+        // Keyed by the stable id; each screen can have its own level.
+        var levels = targets.ToDictionary(t => t.Monitor.Id, t => (uint)Math.Clamp(t.BacklightLevel, 0, 100), StringComparer.OrdinalIgnoreCase);
+        _queue.Add(() => _controller.Apply(levels));
     }
 
     /// <summary>Blocks until everything queued so far has run (or the timeout passes).</summary>

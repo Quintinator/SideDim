@@ -23,6 +23,23 @@ internal static class DimPolicy
         return covers && !(isMaximized && hasCaption);
     }
 
+    /// <summary>
+    /// The screens to dim while <paramref name="keepBright"/> has the focused app: every other screen,
+    /// except the ones set to never dim, each with its own darkness.
+    /// </summary>
+    public static List<DimTarget> Targets(Settings s, IEnumerable<Monitor> monitors, string? keepBright)
+    {
+        if (keepBright is null) return [];
+        var targets = new List<DimTarget>();
+        foreach (var m in monitors)
+        {
+            if (m.Device == keepBright) continue;
+            var levels = s.LevelsFor(m.Id);
+            if (levels.Dim) targets.Add(new DimTarget(m, levels.OverlayStrength, levels.BacklightLevel));
+        }
+        return targets;
+    }
+
     /// <summary>With one monitor there's nothing beside it to dim, so the spotlight is the whole point.</summary>
     public static bool SpotlightOn(Settings s, int monitorCount) => s.Spotlight || monitorCount == 1;
 
